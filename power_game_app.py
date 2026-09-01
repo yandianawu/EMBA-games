@@ -44,7 +44,7 @@ st.markdown("""
         color: #1e3d59;
     }
 </style>
-""", unsafe_with_html=True)
+""", unsafe_allow_html=True)
 
 # Define research data
 data_languages = {
@@ -210,8 +210,8 @@ st.sidebar.markdown("Developed for international EMBA training events on **Cultu
 
 # Tab 1: Live Interactive Power Game
 if menu == "1. Live Interactive Power Game":
-    st.markdown('<div class="main-title">Interactive Power Game</div>', unsafe_with_html=True)
-    st.markdown('<div class="subtitle">Experience the modified ultimatum game in real-time. Play vs. an AI agent configured with culturally embedded strategies.</div>', unsafe_with_html=True)
+    st.markdown('<div class="main-title">Interactive Power Game</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Experience the modified ultimatum game in real-time. Play vs. an AI agent configured with culturally embedded strategies.</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns([1, 2])
     
@@ -335,12 +335,12 @@ if menu == "1. Live Interactive Power Game":
                 <h3>Awaiting Your Move</h3>
                 <p>Configure the game setup on the left and click <b>Play Round & Resolve Outcome</b> to simulate the transaction!</p>
             </div>
-            """, unsafe_with_html=True)
+            """, unsafe_allow_html=True)
 
 # Tab 2: 17-Language Instruction Checker
 elif menu == "2. 17-Language Instruction Checker":
-    st.markdown('<div class="main-title">Multi-Language Prompt Translation Explorer</div>', unsafe_with_html=True)
-    st.markdown('<div class="subtitle">Select a target language to check how the exact same mathematical game rules are presented. Observe the linguistic relativity first-hand.</div>', unsafe_with_html=True)
+    st.markdown('<div class="main-title">Multi-Language Prompt Translation Explorer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Select a target language to check how the exact same mathematical game rules are presented. Observe the linguistic relativity first-hand.</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
@@ -365,8 +365,8 @@ elif menu == "2. 17-Language Instruction Checker":
 
 # Tab 3: Research Insights & Charts
 elif menu == "3. Research Insights & Charts":
-    st.markdown('<div class="main-title">Generative AI Cross-Country Game Results</div>', unsafe_with_html=True)
-    st.markdown('<div class="subtitle">Empirical evidence of culturally embedded biases across GPT-4.1, Gemini 2.5 Flash, and Claude 4 Sonnet.</div>', unsafe_with_html=True)
+    st.markdown('<div class="main-title">Generative AI Cross-Country Game Results</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Empirical evidence of culturally embedded biases across GPT-4.1, Gemini 2.5 Flash, and Claude 4 Sonnet.</div>', unsafe_allow_html=True)
     
     tab_view1, tab_view2 = st.tabs(["📊 Offers by Language", "📈 Power Distance Correlation"])
     
@@ -422,8 +422,8 @@ elif menu == "3. Research Insights & Charts":
 
 # Tab 4: Lesson Plan & Materials
 elif menu == "4. Lesson Plan & Materials":
-    st.markdown('<div class="main-title">Session 1 Lesson Plan (1 Hour)</div>', unsafe_with_html=True)
-    st.markdown('<div class="subtitle">Full syllabus and facilitation guide for your EMBA training session.</div>', unsafe_with_html=True)
+    st.markdown('<div class="main-title">Session 1 Lesson Plan (1 Hour)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Full syllabus and facilitation guide for your EMBA training session.</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
