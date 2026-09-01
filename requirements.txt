@@ -1,4 +1,4 @@
 streamlit
 pandas
-plotly
-openpyx
+numpy
+plotl
