@@ -16,6 +16,10 @@ st.set_page_config(
 )
 
 # Initialize Session State for student responses if not exists
+# Initialize Session State for experiment configurations
+if 'pi_assignment_mode' not in st.session_state:
+    st.session_state.pi_assignment_mode = "Automatic Split (50% Low, 50% High π)"
+
 if 'responses' not in st.session_state:
     st.session_state.responses = [
         {"Timestamp": "2026-09-01 14:02:15", "Student_ID": "EMBA_04", "Language": "French (Français)", "Q1_Clarity_Rating": 5, "Q2_Naturalness_Rating": 4, "Translation_Comments": "The term 'cagnotte' is perfect for 'pool'. Very clear."}
@@ -96,7 +100,7 @@ else:
     if passcode_input:
         st.sidebar.error("❌ Invalid Passcode.")
     else:
-        st.sidebar.info("🔒 Enter 'sjsu2026' to unlock Instructor Controls.")
+        st.sidebar.info("🔒 Enter Passcode to unlock Instructor Controls & Settings.")
 
 # Google Sheets Configuration (Boilerplate / Integration Info)
 st.sidebar.markdown("---")
@@ -131,6 +135,14 @@ if 'custom_translations' not in st.session_state:
 
 if is_instructor:
     st.sidebar.markdown("---")
+    st.sidebar.subheader("⚙️ Classroom Experiment Settings")
+    st.session_state.pi_assignment_mode = st.sidebar.radio(
+        "Veto Probability (π) Assignment Mode:",
+        options=["Automatic Split (50% Low, 50% High π)", "Manual Student Choice"],
+        index=0 if st.session_state.pi_assignment_mode == "Automatic Split (50% Low, 50% High π)" else 1,
+        help="Automatic mode cleanly distributes students to π = 0.1 or π = 0.9 based on Student ID."
+    )
+    st.sidebar.markdown("---")
     st.sidebar.subheader("🔧 Dynamic Translation Customizer")
     selected_custom_lang = st.sidebar.selectbox("Select Language to Edit:", list(default_translations.keys()))
     custom_text = st.sidebar.text_area(
@@ -145,6 +157,17 @@ if is_instructor:
 # Main Title & Presentation Header
 st.markdown("<h1 style='color: #1e3d59; font-size: 32px;'>⚖️ Session 1: Linguistic Relativity & The Power Game</h1>", unsafe_allow_html=True)
 st.markdown("##### Lucas College and Graduate School of Business — EMBA International Forum")
+
+# Unified Student Registration (Shared across Step 1 and Step 2)
+st.markdown("### 🔑 Participant Registration")
+student_id = st.text_input(
+    "Enter your Anonymous Student ID to participate (e.g., EMBA_12):",
+    value=st.session_state.get('global_student_id', ""),
+    placeholder="Enter ID here...",
+    help="This ID will be used anonymously to log your translation ratings and gameplay outcomes."
+)
+if student_id:
+    st.session_state.global_student_id = student_id
 
 # Main Portal Navigation
 tabs = ["🌎 Step 1: Instruction Calibration", "🎮 Step 2: Play the Power Game"]
@@ -180,7 +203,11 @@ with nav_tabs[0]:
     st.warning("⚠️ **Research Constraint:** Please write all qualitative comments in **English** only to facilitate multi-country statistical matching and collation.")
     
     with st.form("feedback_form"):
-        student_id = st.text_input("Enter your Anonymous Student ID (e.g., EMBA_01):", placeholder="e.g. EMBA_12")
+        # Autoload registered student ID
+        if not student_id:
+            st.warning("⚠️ Please enter your Anonymous Student ID in the Registration field at the top of the page first!")
+        else:
+            st.info(f"📝 Registering calibration comments for: **{student_id}**")
         
         col_r1, col_r2 = st.columns(2)
         with col_r1:
@@ -205,7 +232,7 @@ with nav_tabs[0]:
         
         if submit_feedback:
             if not student_id:
-                st.error("❌ Submission Failed: You must enter an Anonymous Student ID.")
+                st.error("❌ Submission Blocked: Please register your Student ID at the top of the page.")
             else:
                 # English-only comment validation
                 non_ascii_found = any(ord(char) > 127 for char in comments)
@@ -242,19 +269,29 @@ with nav_tabs[1]:
     )
     
     # Power Prob Configuration (Replicating paper conditions: Low vs High Veto Prob)
-    st.markdown("---")
-    st.markdown("<h4 style='color: #1e3d59;'>Strategic Power Condition</h4>", unsafe_allow_html=True)
-    
-    # Instructors can enforce split, or students can choose manually based on command settings
-    veto_config = st.radio(
-        "Select your assigned Veto Probability (π) condition:",
-        options=[0.10, 0.90],
-        format_func=lambda x: f"Low Responder Power (π = {x*100:.0f}%)" if x == 0.10 else f"High Responder Power (π = {x*100:.0f}%)",
-        help="π represents the probability that the responder's veto threshold is active."
-    )
-    
-    st.write(f"In this round, the chance that the Responder's veto will be active is **{veto_config*100:.0f}%**.")
-    
+
+    # Resolve veto probability based on Instructor Setting
+    if st.session_state.pi_assignment_mode == "Automatic Split (50% Low, 50% High π)":
+        if student_id:
+            try:
+                numeric_part = int(''.join(filter(str.isdigit, student_id)))
+                veto_config = 0.10 if numeric_part % 2 == 0 else 0.90
+            except ValueError:
+                veto_config = 0.10 if len(student_id) % 2 == 0 else 0.90
+            st.success(f"🎯 **Your Assigned Veto Probability (π):** {veto_config:.2f} ({'Low Responder Power' if veto_config == 0.10 else 'High Responder Power'}) — locked based on your Student ID.")
+        else:
+            veto_config = 0.10
+            st.warning("⚠️ Enter your Anonymous Student ID at the top of the page to unlock and see your assigned Veto Probability.")
+    else:
+        # Manual Student Choice mode
+        veto_config = st.radio(
+            "Select your assigned Veto Probability (π) condition:",
+            options=[0.10, 0.90],
+            format_func=lambda x: f"Low Responder Power (π = {x*100:.0f}%)" if x == 0.10 else f"High Responder Power (π = {x*100:.0f}%)",
+            help="π represents the probability that the responder's veto threshold is active."
+        )
+        st.write(f"In this round, the chance that the Responder's veto will be active is **{veto_config*100:.0f}%**.")
+
     col_p1, col_p2 = st.columns(2)
     
     with col_p1:
@@ -262,7 +299,11 @@ with nav_tabs[1]:
         st.write("You propose how to split the $100. If the offer meets the responder's threshold, it is accepted.")
         
         with st.form("proposer_form"):
-            p_student_id = st.text_input("Confirm Student ID:", key="p_sid")
+            p_student_id = student_id
+            if not student_id:
+                st.warning("⚠️ Please register your Student ID at the top of the page first.")
+            else:
+                st.info(f"Proposer ID: **{student_id}** (Status: Active)")
             offer = st.slider("Your Offer to the Responder ($0 to $100):", min_value=0, max_value=100, value=30, step=1)
             submit_offer = st.form_submit_button("📤 Submit Offer")
             
@@ -320,7 +361,11 @@ with nav_tabs[1]:
         st.write("Set your minimum acceptable threshold. If the proposer's offer meets this, it is accepted.")
         
         with st.form("responder_form"):
-            r_student_id = st.text_input("Confirm Student ID:", key="r_sid")
+            r_student_id = student_id
+            if not student_id:
+                st.warning("⚠️ Please register your Student ID at the top of the page first.")
+            else:
+                st.info(f"Responder ID: **{student_id}** (Status: Active)")
             threshold = st.slider("Your Minimum Threshold ($0 to $100):", min_value=0, max_value=100, value=30, step=1)
             submit_threshold = st.form_submit_button("📤 Submit Threshold")
             
