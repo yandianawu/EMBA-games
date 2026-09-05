@@ -60,22 +60,34 @@ if 'pi_exp_rounds' not in st.session_state:
     st.session_state.pi_exp_rounds = 10  # default exploration rounds
 
 if 'pi_comp_rounds' not in st.session_state:
-    st.session_state.pi_comp_rounds = 5   # default competitive rounds
+    st.session_state.pi_comp_rounds = 5   # default competitive tournament rounds
 
 if 'pi_matching_mode' not in st.session_state:
     st.session_state.pi_matching_mode = "Automatic Split (50% Trustor, 50% Trustee)"
 
-if 'active_stage' not in st.session_state:
-    st.session_state.active_stage = "Stage 1: Exploration"
+if 'exp_round_idx' not in st.session_state:
+    st.session_state.exp_round_idx = 1
 
-if 'active_round_idx' not in st.session_state:
-    st.session_state.active_round_idx = 1
+if 'comp_round_idx' not in st.session_state:
+    st.session_state.comp_round_idx = 1
 
-if 'student_earnings' not in st.session_state:
-    st.session_state.student_earnings = 0.0
+if 'exp_history' not in st.session_state:
+    st.session_state.exp_history = []
 
-if 'active_session_history' not in st.session_state:
-    st.session_state.active_session_history = []
+if 'comp_history' not in st.session_state:
+    st.session_state.comp_history = []
+
+if 'comp_earnings' not in st.session_state:
+    st.session_state.comp_earnings = 0.0
+
+if 'reflection_submitted' not in st.session_state:
+    st.session_state.reflection_submitted = False
+
+if 'custom_ai_discount' not in st.session_state:
+    st.session_state.custom_ai_discount = 0.75
+
+if 'custom_ai_memory' not in st.session_state:
+    st.session_state.custom_ai_memory = "Has Memory (Recalls last round)"
 
 if 'responses' not in st.session_state:
     # Pre-populate with realistic mock research calibration data
@@ -83,18 +95,22 @@ if 'responses' not in st.session_state:
         {
             "Timestamp": "2026-09-04 10:12:15",
             "Student_ID": "EMBA_3042",
-            "Cumulative_Earnings": 105.00,
+            "Cumulative_Earnings": 42.00,
             "Q1_Discount": "The AI trustee immediately returns $0 if gamma is under 0.50. It acts myopically as if there is no future.",
             "Q2_Memory": "Without memory, cooperation collapsed to zero because the trustor couldn't recognize past behavior.",
-            "Q3_Human": "I would be more cautious because humans are emotional and might punish small mistakes more than a rational DQN."
+            "Q3_Human": "I would be more cautious because humans are emotional and might punish small mistakes more than a rational DQN.",
+            "Custom_Gamma": 0.75,
+            "Custom_Memory": "Has Memory (Recalls last round)"
         },
         {
             "Timestamp": "2026-09-04 10:15:32",
             "Student_ID": "EMBA_7195",
-            "Cumulative_Earnings": 112.50,
+            "Cumulative_Earnings": 48.50,
             "Q1_Discount": "Setting γ to 0.90 made the AI trustee highly cooperative. Under γ=0.30 it was completely myopic.",
             "Q2_Memory": "Memory stabilizes expectations. Long memory helps establish stable repeated trigger conventions.",
-            "Q3_Human": "Humans have subjective equity thresholds, so they might return more out of guilt or fairness concerns."
+            "Q3_Human": "Humans have subjective equity thresholds, so they might return more out of guilt or fairness concerns.",
+            "Custom_Gamma": 0.85,
+            "Custom_Memory": "Has Memory (Recalls last round)"
         }
     ]
 
@@ -133,7 +149,7 @@ if 'game_logs' not in st.session_state:
             "Stage": "Stage 2: Competitive Play",
             "Round": 1,
             "Role": "Trustee (Player 2)",
-            "Discount_Rate": 0.75,
+            "Discount_Rate": 0.85,
             "Memory_Status": "Has Memory",
             "Amount_Sent": 5,
             "Amount_Returned": 5,
@@ -141,6 +157,12 @@ if 'game_logs' not in st.session_state:
             "AI_Payout": 10.00
         }
     ]
+
+# Helper function to dynamically update leaderboard earnings
+def update_responses_earnings(student_id, current_earnings):
+    for resp in st.session_state.responses:
+        if resp["Student_ID"] == student_id:
+            resp["Cumulative_Earnings"] = float(current_earnings)
 
 # ----------------- SIDEBAR: Instructor Facilitation Command Center -----------------
 st.sidebar.image("https://img.icons8.com/color/96/000000/handshake.png", width=70)
@@ -190,9 +212,9 @@ st.sidebar.subheader("⏱️ Session 2 Timeline")
 st.sidebar.markdown("""
 *   **00:00 - 00:10**: Intro & Setup
 *   **00:10 - 00:25**: Stage 1 - Exploration Game
-*   **00:25 - 00:40**: Stage 2 - Tournament Game
-*   **00:40 - 00:50**: Evaluation & Submission
-*   **00:50 - 01:00**: Live Leaderboard & Debrief
+*   **00:25 - 00:40**: Stage 2 - Reflection & AI Design
+*   **00:40 - 00:52**: Stage 3 - Tournament Game
+*   **00:52 - 01:00**: Live Leaderboard & Debrief
 """)
 
 # ----------------- MAIN PANEL -----------------
@@ -210,26 +232,37 @@ student_id = st.text_input(
 if student_id:
     st.session_state.global_student_id = student_id
 
-# Display Cumulative Earnings prominently to students
-col_card1, col_card2 = st.columns(2)
-with col_card1:
+# Display Dynamic Lab KPI Panel
+col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+with col_kpi1:
     st.markdown(
         f"""
-        <div style='background-color: #FAF9F6; padding: 1rem; border-radius: 8px; border: 1.5px solid #E5A823; margin-bottom: 1.5rem;'>
-            <div class='metric-label'>💰 YOUR TOTAL ACCUMULATED EARNINGS</div>
-            <div class='metric-value'>${st.session_state.student_earnings:.2f}</div>
-            <p style='margin: 0; color: #4B5563; font-size: 0.85rem;'>Accumulates from both Exploration and Competitive rounds.</p>
+        <div style='background-color: #FAF9F6; padding: 0.8rem; border-radius: 8px; border: 1px solid #E5A823; text-align: center;'>
+            <div class='metric-label'>🎮 EXPLORATION LAB STATUS</div>
+            <div class='metric-value' style='font-size: 1.8rem; color: #1E3A8A;'>{len(st.session_state.exp_history)} / {st.session_state.pi_exp_rounds}</div>
+            <p style='margin: 0; color: #4B5563; font-size: 0.8rem;'>Rounds played in Stage 1</p>
         </div>
         """,
         unsafe_allow_html=True
     )
-with col_card2:
+with col_kpi2:
     st.markdown(
         f"""
-        <div style='background-color: #FAF9F6; padding: 1rem; border-radius: 8px; border: 1.5px solid #1E3A8A; margin-bottom: 1.5rem;'>
-            <div class='metric-label'>📍 CURRENT EXPERIMENT PHASE</div>
-            <div class='metric-value' style='color: #1E3A8A;'>{st.session_state.active_stage}</div>
-            <p style='margin: 0; color: #4B5563; font-size: 0.85rem;'>Round {st.session_state.active_round_idx} in play.</p>
+        <div style='background-color: #FAF9F6; padding: 0.8rem; border-radius: 8px; border: 1px solid #1E3A8A; text-align: center;'>
+            <div class='metric-label'>✍️ REFLECTION & DESIGN</div>
+            <div class='metric-value' style='font-size: 1.8rem; color: #10B981;'>{"COMPLETED ✅" if st.session_state.reflection_submitted else "PENDING ✍️"}</div>
+            <p style='margin: 0; color: #4B5563; font-size: 0.8rem;'>AI partner configuration status</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+with col_kpi3:
+    st.markdown(
+        f"""
+        <div style='background-color: #FAF9F6; padding: 0.8rem; border-radius: 8px; border: 1px solid #10B981; text-align: center;'>
+            <div class='metric-label'>🏆 TOURNAMENT EARNINGS</div>
+            <div class='metric-value' style='font-size: 1.8rem; color: #E5A823;'>${st.session_state.comp_earnings:.2f}</div>
+            <p style='margin: 0; color: #4B5563; font-size: 0.8rem;'>Stage 3 payouts only (determines winner)</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -249,29 +282,23 @@ if st.session_state.pi_matching_mode == "Automatic Split (50% Trustor, 50% Trust
 
 # Define Tabs
 tabs = [
-    "🎮 Step 1: Live Trust Game", 
-    "✍️ Step 2: Open Evaluation Questions"
+    "🎮 Tab 1: Stage 1: Exploration Lab", 
+    "✍️ Tab 2: Stage 2: Reflection & AI Design",
+    "🏆 Tab 3: Stage 3: Competitive Tournament"
 ]
 if is_instructor:
-    tabs.append("📊 Step 3: Instructor Course Analytics")
+    tabs.append("📊 Tab 4: Instructor Course Analytics")
 
 nav_tabs = st.tabs(tabs)
 
 # =============================================================================
-# TAB 1: INTERACTIVE TRUST GAME
+# TAB 1: STAGE 1: EXPLORATION LAB
 # =============================================================================
 with nav_tabs[0]:
     st.markdown("""
     <div class='card'>
-        <h3>🎮 Repeated Investment (Trust) Game Rules</h3>
-        <p>You are participating in the traditional two-player Investment Game designed to evaluate behavioral cooperation:</p>
-        <ul>
-            <li><b>Player 1 (Trustor)</b> starts with <b>$10</b> in cash and decides how much ($x) to send to <b>Player 2 (Trustee)</b>.</li>
-            <li>The amount sent is <b>tripled (3x)</b> in transit (e.g., $5 sent becomes $15).</li>
-            <li>Player 2 receives the tripled pool and decides how much ($y) to return to Player 1.</li>
-            <li><b>Payouts:</b> Trustor earns 10 - x + y; Trustee earns 3x - y.</li>
-        </ul>
-        <p><i>Objective:</i> Your opponent is a trained Deep Q-Network (DQN) reinforcement learning agent. Experiment with parameters in Stage 1 to learn how they govern trust, then apply your insights in Stage 2 to maximize your final earnings!</p>
+        <h3>🎮 Stage 1: Exploration & Parameter Discovery</h3>
+        <p>In this phase, you are free to explore how different algorithmic designs impact cooperation. Set your role and configure the AI's settings to understand how they learn.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -279,93 +306,44 @@ with nav_tabs[0]:
         st.warning("⚠️ Please enter or confirm your Anonymous Student ID in the onboarding field above before playing!")
         st.stop()
 
-    current_stage = st.session_state.active_stage
-    current_r = st.session_state.active_round_idx
-
-    # Check limits based on current phase
-    max_rounds = st.session_state.pi_exp_rounds if current_stage == "Stage 1: Exploration" else st.session_state.pi_comp_rounds
+    current_r = st.session_state.exp_round_idx
+    max_rounds = st.session_state.pi_exp_rounds
 
     if current_r > max_rounds:
-        if current_stage == "Stage 1: Exploration":
-            st.success("🎉 **Stage 1 (Exploration Phase) Complete!**")
-            st.info("You have finished your exploration rounds. You are now ready to progress to **Stage 2: Competitive Play**.")
-            
-            if st.button("🚀 Advance to Stage 2 (Competitive Play)"):
-                st.session_state.active_stage = "Stage 2: Competitive Play"
-                st.session_state.active_round_idx = 1
-                st.session_state.active_session_history = []
-                st.session_state.pop('active_round_result', None)
-                st.rerun()
-        else:
-            st.success("🏆 **Competitive Tournament Session Complete!**")
-            st.balloons()
-            st.info("Please navigate to **Tab 2 (Evaluation Questions)** to submit your strategic reflections and log your final scores on the class leaderboard.")
-            
-            if st.button("🔄 Reset & Restart Experiment"):
-                st.session_state.active_stage = "Stage 1: Exploration"
-                st.session_state.active_round_idx = 1
-                st.session_state.student_earnings = 0.0
-                st.session_state.active_session_history = []
-                st.session_state.pop('active_round_result', None)
-                st.rerun()
+        st.success(f"🎉 **Stage 1 (Exploration Lab) Complete!** You have completed all {max_rounds} rounds.")
+        st.info("Now, move on to **Tab 2 (Stage 2: Reflection & AI Design)** to submit your strategic analysis and configure your final AI partner.")
+        if st.button("🔄 Reset & Restart Exploration", key="reset_exp"):
+            st.session_state.exp_history = []
+            st.session_state.exp_round_idx = 1
+            st.session_state.pop('active_exp_result', None)
+            st.rerun()
     else:
-        st.markdown(f"#### **Round {current_r} of {max_rounds} ({current_stage})**")
+        st.markdown(f"#### **Exploration Round {current_r} of {max_rounds}**")
         
-        # Setup Matching & Roles
-        if current_stage == "Stage 1: Exploration":
-            # Exploration phase allows free choice of roles and AI parameters
-            active_role = st.selectbox(
-                "Select your role to explore for this round:",
-                ["Trustor (Player 1)", "Trustee (Player 2)"],
-                key=f"role_choice_{current_stage}_{current_r}"
+        # Select Role
+        active_role = st.selectbox(
+            "Select your role to explore for this round:",
+            ["Trustor (Player 1)", "Trustee (Player 2)"],
+            key=f"exp_role_{current_r}"
+        )
+        
+        col_cfg1, col_cfg2 = st.columns(2)
+        with col_cfg1:
+            # FIX: Remove any reference to gamma > 0.5 in help message as requested!
+            ai_discount = st.slider(
+                "Configure AI Agent's Future Discount Rate (γ):", 
+                0.02, 0.98, 0.75, 0.05, 
+                key=f"exp_disc_{current_r}",
+                help="Measures how much the AI values future rewards. Explore different values to see how this affects behavior."
             )
-            
-            st.write("🔧 **Algorithmic Configuration:** Tweak your AI partner's parameters below to see how they change behavior.")
-            col_cfg1, col_grid_space, col_cfg2 = st.columns([10, 1, 10])
-            with col_cfg1:
-                ai_discount = st.slider(
-                    "Configure AI Agent's Future Discount Rate (γ):", 
-                    0.02, 0.98, 0.75, 0.05, 
-                    key=f"disc_slider_{current_stage}_{current_r}",
-                    help="Measures how much the AI values future rewards. γ > 0.50 is theoretically required for cooperation."
-                )
-            with col_cfg2:
-                ai_memory = st.selectbox(
-                    "Configure AI Agent's Memory Capacity:", 
-                    ["Has Memory (Recalls last round)", "No Memory (Plays myopically)"],
-                    key=f"mem_select_{current_stage}_{current_r}",
-                    help="Determines if the AI can memorize past behaviors to maintain cooperation."
-                )
-        else:
-            # Stage 2: Competitive Tournament. Locked parameters (DQN is trained and active)
-            st.subheader("🏆 Competitive Play Mode")
-            st.warning("⚠️ **Algorithmic Rules:** Your AI partner's configurations are now locked! Use your understanding from Stage 1 to maximize your score.")
-            
-            # Roles resolved based on instructor configs
-            if st.session_state.pi_matching_mode == "Automatic Split (50% Trustor, 50% Trustee)":
-                st.info(f"🎯 **Your Assigned Role:** `{student_role}` (Locked based on your Student ID to balance the class).")
-                active_role = student_role
-            else:
-                active_role = st.selectbox(
-                    "Choose your role for this round:",
-                    ["Trustor (Player 1)", "Trustee (Player 2)"],
-                    key=f"manual_role_{current_stage}_{current_r}"
-                )
-                
-            # Locked Parameters represent standard trained DQN
-            ai_discount = 0.75
-            ai_memory = "Has Memory"
-            
-            st.markdown(
-                f"""
-                <div style='background-color: #EBF5FF; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;'>
-                    💡 <b>Trained DQN Agent Active:</b> Discount Rate (γ) = <b>0.75</b>, Memory = <b>Has Memory</b>.
-                </div>
-                """,
-                unsafe_allow_html=True
+        with col_cfg2:
+            ai_memory = st.selectbox(
+                "Configure AI Agent's Memory Capacity:", 
+                ["Has Memory (Recalls last round)", "No Memory (Plays myopically)"],
+                key=f"exp_mem_{current_r}",
+                help="Determines if the AI can memorize past behaviors to maintain cooperation."
             )
 
-        # Main columns
         col_play, col_results = st.columns([1, 1])
         
         with col_play:
@@ -374,20 +352,17 @@ with nav_tabs[0]:
                 user_sent = st.slider(
                     "You are Trustor. Amount you send to AI Trustee ($0 - $10):", 
                     0, 10, 5, 
-                    key=f"user_sent_slider_{current_stage}_{current_r}"
+                    key=f"exp_sent_slider_{current_r}"
                 )
-                submit_inv = st.button("📤 Submit Investment & Send", key=f"submit_inv_{current_stage}_{current_r}")
+                submit_inv = st.button("📤 Submit Investment & Send", key=f"exp_sub_inv_{current_r}")
                 
                 if submit_inv:
-                    # Simulation behavior strictly grounded in MS paper results
+                    # Simulated Trustee Return logic
                     if ai_discount < 0.50:
-                        # Myopia Barrier: Trustee returns zero
                         ai_returned = 0
                     elif ai_memory == "No Memory (Plays myopically)":
-                        # Lacks memory: unstable low returns
                         ai_returned = random.randint(0, int(user_sent * 1.0))
                     else:
-                        # Stable trained DQN: Trustee cooperates, peak reciprocity at sent = 6
                         base_return_ratio = 0.40 if ai_discount >= 0.75 else 0.20
                         if user_sent == 0:
                             ai_returned = 0
@@ -398,25 +373,20 @@ with nav_tabs[0]:
                         else:
                             ai_returned = int(user_sent * 3 * base_return_ratio)
                             
-                        # Add element of repeated interaction co-adaptation
-                        if current_r > 1:
-                            prev_sent = st.session_state.active_session_history[-1]['Amount_Sent'] if len(st.session_state.active_session_history) > 0 else 5
+                        # Repeated co-adaptation
+                        if current_r > 1 and len(st.session_state.exp_history) > 0:
+                            prev_sent = st.session_state.exp_history[-1]['Amount_Sent']
                             if user_sent >= prev_sent:
-                                ai_returned += random.choice([0, 1])  # reward trust
+                                ai_returned += random.choice([0, 1])
                             else:
-                                ai_returned -= random.choice([0, 1])  # penalize defection
+                                ai_returned -= random.choice([0, 1])
                                 
-                    # Bound return
                     ai_returned = max(0, min(user_sent * 3, ai_returned))
                     
                     user_payout = 10 - user_sent + ai_returned
                     ai_payout = user_sent * 3 - ai_returned
                     
-                    # Log data
                     round_data = {
-                        "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "Student_ID": student_id,
-                        "Stage": current_stage,
                         "Round": current_r,
                         "Role": active_role,
                         "Discount_Rate": ai_discount,
@@ -427,58 +397,56 @@ with nav_tabs[0]:
                         "AI_Payout": float(ai_payout)
                     }
                     
-                    st.session_state.active_session_history.append(round_data)
-                    st.session_state.game_logs.append(round_data)
-                    st.session_state.student_earnings += float(user_payout)
-                    st.session_state.active_round_result = round_data
-                    st.session_state.active_round_idx += 1
-                    st.rerun()
+                    st.session_state.exp_history.append(round_data)
+                    st.session_state.active_exp_result = round_data
+                    st.session_state.exp_round_idx += 1
                     
-            else: # Student playing as Trustee (Player 2)
-                # Compute what the AI Trustor will send
+                    # Log to global game logs
+                    global_log = round_data.copy()
+                    global_log["Timestamp"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    global_log["Student_ID"] = student_id
+                    global_log["Stage"] = "Stage 1: Exploration"
+                    st.session_state.game_logs.append(global_log)
+                    
+                    st.rerun()
+            else:
+                # Student playing as Trustee (Player 2)
                 if ai_memory == "No Memory (Plays myopically)":
-                    ai_sent = random.randint(0, 3)  # unstable/low trust
+                    ai_sent = random.randint(0, 3)
                 else:
                     if current_r == 1:
-                        ai_sent = 6 if ai_discount >= 0.75 else 3  # Initial cooperative trust
+                        ai_sent = 6 if ai_discount >= 0.75 else 3
                     else:
-                        # Trigger Strategy: Depends strictly on the student's return in the previous round
-                        if len(st.session_state.active_session_history) > 0:
-                            prev_log = st.session_state.active_session_history[-1]
+                        if len(st.session_state.exp_history) > 0:
+                            prev_log = st.session_state.exp_history[-1]
                             prev_gain = prev_log['Amount_Returned'] - prev_log['Amount_Sent']
                             if prev_gain >= 0:
-                                # Trigger trust reinforcement
                                 ai_sent = 6 if ai_discount >= 0.75 else 4
                             else:
-                                # Trigger collapse of trust
                                 ai_sent = random.choice([0, 1, 2])
                         else:
                             ai_sent = 5
                             
                 st.markdown(f"**AI Trustor sends you:** `${ai_sent}.00` (tripled to `${ai_sent * 3}.00` in your pool)")
                 
-                # CRITICAL BUG WORKAROUND: If ai_sent == 0, slider min=max=0 causes StreamlitInvalidMinMaxError. 
-                # We dynamically check and render a non-empty slider, or handle zero case with a static state.
+                # BUG WORKAROUND: If ai_sent * 3 == 0, prevent crash
                 if ai_sent * 3 == 0:
                     st.warning("⚠️ **The AI Trustor sent $0.** As a result, there are no funds in your pool to return.")
                     user_returned = 0
-                    submit_ret = st.button("📤 Log Round ($0 Return)", key=f"sub_zero_ret_{current_stage}_{current_r}")
+                    submit_ret = st.button("📤 Log Round ($0 Return)", key=f"exp_sub_zero_ret_{current_r}")
                 else:
                     user_returned = st.slider(
                         f"As Trustee, how much of `${ai_sent * 3}.00` do you return to the AI?", 
                         0, ai_sent * 3, ai_sent, 
-                        key=f"user_ret_slider_{current_stage}_{current_r}"
+                        key=f"exp_ret_slider_{current_r}"
                     )
-                    submit_ret = st.button("📤 Submit Return Amount", key=f"submit_ret_{current_stage}_{current_r}")
-                
+                    submit_ret = st.button("📤 Submit Return Amount", key=f"exp_sub_ret_{current_r}")
+                    
                 if submit_ret:
                     user_payout = ai_sent * 3 - user_returned
                     ai_payout = 10 - ai_sent + user_returned
                     
                     round_data = {
-                        "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "Student_ID": student_id,
-                        "Stage": current_stage,
                         "Round": current_r,
                         "Role": active_role,
                         "Discount_Rate": ai_discount,
@@ -489,17 +457,23 @@ with nav_tabs[0]:
                         "AI_Payout": float(ai_payout)
                     }
                     
-                    st.session_state.active_session_history.append(round_data)
-                    st.session_state.game_logs.append(round_data)
-                    st.session_state.student_earnings += float(user_payout)
-                    st.session_state.active_round_result = round_data
-                    st.session_state.active_round_idx += 1
+                    st.session_state.exp_history.append(round_data)
+                    st.session_state.active_exp_result = round_data
+                    st.session_state.exp_round_idx += 1
+                    
+                    # Global log
+                    global_log = round_data.copy()
+                    global_log["Timestamp"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    global_log["Student_ID"] = student_id
+                    global_log["Stage"] = "Stage 1: Exploration"
+                    st.session_state.game_logs.append(global_log)
+                    
                     st.rerun()
 
         with col_results:
-            st.markdown("#### **Active Session Results**")
-            if 'active_round_result' in st.session_state:
-                res = st.session_state.active_round_result
+            st.markdown("#### **Active Round Results (Exploration)**")
+            if 'active_exp_result' in st.session_state:
+                res = st.session_state.active_exp_result
                 col_res1, col_res2, col_res3 = st.columns(3)
                 with col_res1:
                     st.metric(f"Round {res['Round']} Sent", f"${res['Amount_Sent']}.00")
@@ -508,7 +482,6 @@ with nav_tabs[0]:
                 with col_res3:
                     st.metric("Amount Returned", f"${res['Amount_Returned']}.00")
                     
-                # Plot Payouts Bar Chart
                 payout_df = pd.DataFrame({
                     "Player": ["You", "AI Agent"],
                     "Payout ($)": [res['User_Payout'], res['AI_Payout']]
@@ -516,60 +489,74 @@ with nav_tabs[0]:
                 fig_payout = px.bar(
                     payout_df, x="Player", y="Payout ($)", color="Player",
                     color_discrete_map={"You": "#1E3A8A", "AI Agent": "#10B981"},
-                    range_y=[0, 30], height=240
+                    range_y=[0, 30], height=220
                 )
                 fig_payout.update_layout(margin=dict(l=20, r=20, t=10, b=10))
                 st.plotly_chart(fig_payout, use_container_width=True)
             else:
                 st.info("Submit your decision in the panel on the left to resolve and visualize your game results.")
 
-    # Display active session history table
-    if len(st.session_state.active_session_history) > 0:
-        st.markdown("#### **Active Session History Log**")
-        df_active = pd.DataFrame(st.session_state.active_session_history)
+    if len(st.session_state.exp_history) > 0:
+        st.markdown("#### **Exploration History Log**")
+        df_exp = pd.DataFrame(st.session_state.exp_history)
         st.dataframe(
-            df_active[["Round", "Role", "Amount_Sent", "Amount_Returned", "User_Payout", "AI_Payout"]],
+            df_exp[["Round", "Role", "Discount_Rate", "Memory_Status", "Amount_Sent", "Amount_Returned", "User_Payout", "AI_Payout"]],
             use_container_width=True,
             hide_index=True
         )
 
 # =============================================================================
-# TAB 2: EVALUATION FORM
+# TAB 2: STAGE 2: REFLECTION & AI DESIGN
 # =============================================================================
 with nav_tabs[1]:
     st.markdown("""
     <div class='card'>
-        <h3>✍️ Strategic Evaluation & Reflection</h3>
-        <p>Reflect on your findings from the parameter design lab. Your answers will be compiled onto the instructor projector to drive the post-game discussion!</p>
+        <h3>✍️ Stage 2: Strategic Reflections & AI Design Lab</h3>
+        <p>Before entering the Competitive Tournament, reflect on your findings and explicitly design the parameters of your AI partner. Submit your evaluation to lock in your AI's specifications!</p>
     </div>
     """, unsafe_allow_html=True)
     
     with st.form("evaluation_form"):
-        st.write(f"📝 Logging strategic evaluation for participant: **{student_id}**")
+        st.write(f"📝 Logging strategic evaluation and AI design for participant: **{student_id}**")
         st.markdown("---")
         
         q1_text = st.text_area(
             "Question 1: What discount factor (γ) settings change the AI partner's behavior, and how?",
-            placeholder="e.g. Setting gamma below 0.50 triggers absolute defection, whereas higher values lead to..."
+            placeholder="Based on your Stage 1 exploration, what happens when gamma is above or below certain thresholds?"
         )
         
         q2_text = st.text_area(
             "Question 2: What does the memory availability setting change in terms of the AI's behavior and cooperation?",
-            placeholder="e.g. When memory is removed, the AI cannot co-adapt to triggers, causing cooperation to collapse..."
+            placeholder="How does removing or keeping the memory capacity alter the stability of the co-adapted strategies?"
         )
         
         q3_text = st.text_area(
             "Question 3: If you were going to play this game against a human instead of an AI, how would your strategy change?",
-            placeholder="e.g. Humans are less mathematically predictable and more influenced by emotion, so I would..."
+            placeholder="How do human emotional triggers, fairness biases, and unpredictable shifts differ from the rational DQN agent?"
         )
         
-        submit_feedback = st.form_submit_button("📤 Submit Evaluation and Log Score")
+        st.markdown("### 🔧 Custom AI Partner Configuration (Q4)")
+        st.write("Specify the exact learning parameters for your AI partner in the Competitive Tournament:")
+        
+        custom_gamma = st.slider(
+            "Design your Competitive AI Partner's Future Discount Rate (γ):", 
+            0.02, 0.98, 0.75, 0.05,
+            help="This locked value governs how much your AI partner values future rounds during Stage 3."
+        )
+        
+        custom_mem = st.selectbox(
+            "Design your Competitive AI Partner's Memory Capacity:", 
+            ["Has Memory (Recalls last round)", "No Memory (Plays myopically)"],
+            help="Select whether your AI partner should co-adapt to behavioral trigger cues or play without memory."
+        )
+        
+        submit_feedback = st.form_submit_button("📤 Lock AI Partner Specifications & Submit Reflections")
         
         if submit_feedback:
             if not student_id:
-                st.error("❌ Submission Failed: Please register or confirm your Anonymous Student ID above first.")
+                st.error("❌ Submission Failed: Please register or confirm your Anonymous Student ID at the top of the page first.")
             else:
-                # English-only comment validation to prevent downstream database encoding errors
+                # English-only comment validation
                 all_text = q1_text + " " + q2_text + " " + q3_text
                 non_ascii_found = any(ord(char) > 127 for char in all_text)
                 has_asian_chars = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', all_text))
@@ -577,33 +564,271 @@ with nav_tabs[1]:
                 if non_ascii_found or has_asian_chars:
                     st.error("❌ Submission Blocked: Your qualitative comments contain non-English characters. Please translate your feedback into English and submit again.")
                 else:
+                    st.session_state.custom_ai_discount = custom_gamma
+                    st.session_state.custom_ai_memory = custom_mem
+                    st.session_state.reflection_submitted = True
+                    
                     new_response = {
                         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Student_ID": student_id,
-                        "Cumulative_Earnings": float(st.session_state.student_earnings),
+                        "Cumulative_Earnings": float(st.session_state.comp_earnings),
                         "Q1_Discount": q1_text if q1_text else "No response provided.",
                         "Q2_Memory": q2_text if q2_text else "No response provided.",
-                        "Q3_Human": q3_text if q3_text else "No response provided."
+                        "Q3_Human": q3_text if q3_text else "No response provided.",
+                        "Custom_Gamma": float(custom_gamma),
+                        "Custom_Memory": custom_mem
                     }
+                    
+                    # Deduplicate responses
+                    st.session_state.responses = [r for r in st.session_state.responses if r["Student_ID"] != student_id]
                     st.session_state.responses.append(new_response)
+                    
                     st.balloons()
-                    st.success(f"🎉 Reflection recorded successfully! Your cumulative score of **${st.session_state.student_earnings:.2f}** has been added to the master class leaderboard.")
+                    st.success(f"🎉 **AI Partner Configured successfully!** Future Discount Rate locked at **γ = {custom_gamma:.2f}** with memory mode **'{custom_mem}'**. Move on to **Tab 3: Stage 3: Competitive Tournament** to play!")
 
 # =============================================================================
-# TAB 3: INSTRUCTOR ANALYTICS Dashboard (Passcode Protected!)
+# TAB 3: STAGE 3: COMPETITIVE TOURNAMENT
+# =============================================================================
+with nav_tabs[2]:
+    st.markdown("""
+    <div class='card'>
+        <h3>🏆 Stage 3: Competitive Tournament</h3>
+        <p>In this phase, you play against the specific AI partner you configured in Stage 2. Your payouts here are aggregated into your Cumulative Tournament Earnings, which determine your final rank on the class leaderboard!</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not student_id:
+        st.warning("⚠️ Please enter or confirm your Anonymous Student ID in the onboarding field above before playing!")
+        st.stop()
+
+    if not st.session_state.reflection_submitted:
+        st.error("⚠️ **AI Partner Not Configured!** Please complete and submit your strategic reflections and design parameters in **Tab 2** first to unlock the tournament.")
+    else:
+        current_r = st.session_state.comp_round_idx
+        max_rounds = st.session_state.pi_comp_rounds
+        
+        # Display current locked AI specifications
+        st.markdown(
+            f"""
+            <div style='background-color: #EBF5FF; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; border-left: 5px solid #1E3A8A;'>
+                🎯 <b>Your Custom AI Partner:</b> Future Discount Rate (γ) = <b>{st.session_state.custom_ai_discount:.2f}</b> | Memory Status = <b>{st.session_state.custom_ai_memory}</b>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if current_r > max_rounds:
+            st.success(f"🏆 **Competitive Tournament Session Complete!** You have completed all {max_rounds} rounds.")
+            st.balloons()
+            st.info("Check the class leaderboard projected on the main classroom screen to see if you have won the grand prize!")
+            if st.button("🔄 Restart Tournament Session", key="reset_comp"):
+                st.session_state.comp_history = []
+                st.session_state.comp_round_idx = 1
+                st.session_state.comp_earnings = 0.0
+                st.session_state.pop('active_comp_result', None)
+                # Update responses to zero out cumulative score until they play again
+                update_responses_earnings(student_id, 0.0)
+                st.rerun()
+        else:
+            st.markdown(f"#### **Tournament Round {current_r} of {max_rounds}**")
+            
+            # Resolve Role
+            if st.session_state.pi_matching_mode == "Automatic Split (50% Trustor, 50% Trustee)":
+                st.info(f"🎯 **Your Assigned Role:** `{student_role}` (Locked based on your Student ID to balance the class).")
+                active_role = student_role
+            else:
+                active_role = st.selectbox(
+                    "Choose your role for this round:",
+                    ["Trustor (Player 1)", "Trustee (Player 2)"],
+                    key=f"comp_role_{current_r}"
+                )
+
+            # Retrieve custom AI parameters configured by the student
+            ai_discount = st.session_state.custom_ai_discount
+            ai_memory = st.session_state.custom_ai_memory
+
+            col_play, col_results = st.columns([1, 1])
+            
+            with col_play:
+                st.markdown("---")
+                if active_role == "Trustor (Player 1)":
+                    user_sent = st.slider(
+                        "You are Trustor. Amount you send to AI Trustee ($0 - $10):", 
+                        0, 10, 5, 
+                        key=f"comp_sent_slider_{current_r}"
+                    )
+                    submit_inv = st.button("📤 Submit Investment & Send", key=f"comp_sub_inv_{current_r}")
+                    
+                    if submit_inv:
+                        if ai_discount < 0.50:
+                            ai_returned = 0
+                        elif ai_memory == "No Memory (Plays myopically)":
+                            ai_returned = random.randint(0, int(user_sent * 1.0))
+                        else:
+                            base_return_ratio = 0.40 if ai_discount >= 0.75 else 0.20
+                            if user_sent == 0:
+                                ai_returned = 0
+                            elif user_sent <= 5:
+                                ai_returned = int(user_sent * 3 * (base_return_ratio * 0.8))
+                            elif user_sent == 6:
+                                ai_returned = int(user_sent * 3 * (base_return_ratio * 1.1))  # Peak reciprocity
+                            else:
+                                ai_returned = int(user_sent * 3 * base_return_ratio)
+                                
+                            if current_r > 1 and len(st.session_state.comp_history) > 0:
+                                prev_sent = st.session_state.comp_history[-1]['Amount_Sent']
+                                if user_sent >= prev_sent:
+                                    ai_returned += random.choice([0, 1])
+                                else:
+                                    ai_returned -= random.choice([0, 1])
+                                    
+                        ai_returned = max(0, min(user_sent * 3, ai_returned))
+                        
+                        user_payout = 10 - user_sent + ai_returned
+                        ai_payout = user_sent * 3 - ai_returned
+                        
+                        round_data = {
+                            "Round": current_r,
+                            "Role": active_role,
+                            "Discount_Rate": ai_discount,
+                            "Memory_Status": ai_memory,
+                            "Amount_Sent": user_sent,
+                            "Amount_Returned": ai_returned,
+                            "User_Payout": float(user_payout),
+                            "AI_Payout": float(ai_payout)
+                        }
+                        
+                        st.session_state.comp_history.append(round_data)
+                        st.session_state.comp_earnings += float(user_payout)
+                        st.session_state.active_comp_result = round_data
+                        st.session_state.comp_round_idx += 1
+                        
+                        # Sync with responses for leaderboard
+                        update_responses_earnings(student_id, st.session_state.comp_earnings)
+                        
+                        # Global logs
+                        global_log = round_data.copy()
+                        global_log["Timestamp"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        global_log["Student_ID"] = student_id
+                        global_log["Stage"] = "Stage 2: Competitive Play"
+                        st.session_state.game_logs.append(global_log)
+                        
+                        st.rerun()
+                else:
+                    # Student playing as Trustee (Player 2)
+                    if ai_memory == "No Memory (Plays myopically)":
+                        ai_sent = random.randint(0, 3)
+                    else:
+                        if current_r == 1:
+                            ai_sent = 6 if ai_discount >= 0.75 else 3
+                        else:
+                            if len(st.session_state.comp_history) > 0:
+                                prev_log = st.session_state.comp_history[-1]
+                                prev_gain = prev_log['Amount_Returned'] - prev_log['Amount_Sent']
+                                if prev_gain >= 0:
+                                    ai_sent = 6 if ai_discount >= 0.75 else 4
+                                else:
+                                    ai_sent = random.choice([0, 1, 2])
+                            else:
+                                ai_sent = 5
+                                
+                    st.markdown(f"**AI Trustor sends you:** `${ai_sent}.00` (tripled to `${ai_sent * 3}.00` in your pool)")
+                    
+                    # BUG WORKAROUND: If ai_sent * 3 == 0, prevent crash
+                    if ai_sent * 3 == 0:
+                        st.warning("⚠️ **The AI Trustor sent $0.** As a result, there are no funds in your pool to return.")
+                        user_returned = 0
+                        submit_ret = st.button("📤 Log Round ($0 Return)", key=f"comp_sub_zero_ret_{current_r}")
+                    else:
+                        user_returned = st.slider(
+                            f"As Trustee, how much of `${ai_sent * 3}.00` do you return to the AI?", 
+                            0, ai_sent * 3, ai_sent, 
+                            key=f"comp_ret_slider_{current_r}"
+                        )
+                        submit_ret = st.button("📤 Submit Return Amount", key=f"comp_sub_ret_{current_r}")
+                        
+                    if submit_ret:
+                        user_payout = ai_sent * 3 - user_returned
+                        ai_payout = 10 - ai_sent + user_returned
+                        
+                        round_data = {
+                            "Round": current_r,
+                            "Role": active_role,
+                            "Discount_Rate": ai_discount,
+                            "Memory_Status": ai_memory,
+                            "Amount_Sent": ai_sent,
+                            "Amount_Returned": user_returned,
+                            "User_Payout": float(user_payout),
+                            "AI_Payout": float(ai_payout)
+                        }
+                        
+                        st.session_state.comp_history.append(round_data)
+                        st.session_state.comp_earnings += float(user_payout)
+                        st.session_state.active_comp_result = round_data
+                        st.session_state.comp_round_idx += 1
+                        
+                        # Sync with responses
+                        update_responses_earnings(student_id, st.session_state.comp_earnings)
+                        
+                        # Global logs
+                        global_log = round_data.copy()
+                        global_log["Timestamp"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        global_log["Student_ID"] = student_id
+                        global_log["Stage"] = "Stage 2: Competitive Play"
+                        st.session_state.game_logs.append(global_log)
+                        
+                        st.rerun()
+
+            with col_results:
+                st.markdown("#### **Active Round Results (Tournament)**")
+                if 'active_comp_result' in st.session_state:
+                    res = st.session_state.active_comp_result
+                    col_res1, col_res2, col_res3 = st.columns(3)
+                    with col_res1:
+                        st.metric(f"Round {res['Round']} Sent", f"${res['Amount_Sent']}.00")
+                    with col_res2:
+                        st.metric("Tripled Value", f"${res['Amount_Sent'] * 3}.00")
+                    with col_res3:
+                        st.metric("Amount Returned", f"${res['Amount_Returned']}.00")
+                        
+                    payout_df = pd.DataFrame({
+                        "Player": ["You", "AI Agent"],
+                        "Payout ($)": [res['User_Payout'], res['AI_Payout']]
+                    })
+                    fig_payout = px.bar(
+                        payout_df, x="Player", y="Payout ($)", color="Player",
+                        color_discrete_map={"You": "#1E3A8A", "AI Agent": "#10B981"},
+                        range_y=[0, 30], height=220
+                    )
+                    fig_payout.update_layout(margin=dict(l=20, r=20, t=10, b=10))
+                    st.plotly_chart(fig_payout, use_container_width=True)
+                else:
+                    st.info("Submit your decision in the panel on the left to resolve and visualize your game results.")
+
+        if len(st.session_state.comp_history) > 0:
+            st.markdown("#### **Tournament History Log**")
+            df_comp = pd.DataFrame(st.session_state.comp_history)
+            st.dataframe(
+                df_comp[["Round", "Role", "Amount_Sent", "Amount_Returned", "User_Payout", "AI_Payout"]],
+                use_container_width=True,
+                hide_index=True
+            )
+
+# =============================================================================
+# TAB 4: INSTRUCTOR ANALYTICS Dashboard (Passcode Protected!)
 # =============================================================================
 if is_instructor:
-    with nav_tabs[2]:
-        st.markdown("<h3 style='color: #1E3A8A;'>📊 Step 3: Instructor Course Analytics Dashboard</h3>", unsafe_allow_html=True)
+    with nav_tabs[3]:
+        st.markdown("<h3 style='color: #1E3A8A;'>📊 Tab 4: Instructor Course Analytics Dashboard</h3>", unsafe_allow_html=True)
         st.write("Monitor live classroom submissions, project the student earnings leaderboard, and download research data.")
         
         # 1. Leaderboard Ranking
-        st.markdown("#### **🏆 Classroom Earnings Leaderboard**")
+        st.markdown("#### **🏆 Classroom Earnings Leaderboard (Competitive Stage Only)**")
         st.write("Display this on the projector to announce the EMBA winner and award prizes!")
         
         df_responses = pd.DataFrame(st.session_state.responses)
         if not df_responses.empty:
-            # Rank students by cumulative earnings
+            # Rank students by cumulative earnings in the competitive stage
             leaderboard_df = df_responses.copy()
             leaderboard_df["Cumulative_Earnings"] = leaderboard_df["Cumulative_Earnings"].astype(float)
             leaderboard_df = leaderboard_df.sort_values(by="Cumulative_Earnings", ascending=False).reset_index(drop=True)
@@ -611,13 +836,13 @@ if is_instructor:
             leaderboard_df.index.name = "Rank"
             
             st.dataframe(
-                leaderboard_df[["Student_ID", "Cumulative_Earnings"]], 
+                leaderboard_df[["Student_ID", "Cumulative_Earnings", "Custom_Gamma", "Custom_Memory"]], 
                 use_container_width=True
             )
             
             winner_id = leaderboard_df.iloc[0]["Student_ID"]
             winner_earnings = leaderboard_df.iloc[0]["Cumulative_Earnings"]
-            st.success(f"👑 **Current Classroom Leader:** Participant `{winner_id}` with **${winner_earnings:.2f}** in accumulated payouts!")
+            st.success(f"👑 **Current Classroom Leader:** Participant `{winner_id}` with **${winner_earnings:.2f}** in accumulated tournament payouts!")
         else:
             st.info("No submissions logged on the leaderboard yet.")
             
@@ -625,7 +850,7 @@ if is_instructor:
         
         # 2. Student Reflection Submissions
         if not df_responses.empty:
-            st.markdown("#### **I. Student Reflection Answers**")
+            st.markdown("#### **I. Student Reflection Answers & AI Designs**")
             st.dataframe(df_responses, use_container_width=True)
             
             # Export Calibration CSV
@@ -694,7 +919,7 @@ if is_instructor:
                 # Live class average overlay
                 student_disc_groups = df_games.copy()
                 if not student_disc_groups.empty:
-                    # CRITICAL BUG FIX: Isolate only numeric columns before calculating mean to avoid Pandas TypeError!
+                    # Isolate only numeric columns before calculating mean to avoid Pandas TypeError!
                     numeric_cols = ["Discount_Rate", "Amount_Sent", "Amount_Returned"]
                     student_disc_groups = student_disc_groups[numeric_cols].astype(float)
                     student_disc_agg = student_disc_groups.groupby("Discount_Rate").mean().reset_index()
