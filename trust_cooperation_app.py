@@ -9,7 +9,7 @@ import re
 
 # Set page configuration
 st.set_page_config(
-    page_title="Session 2: The Evolution of Cooperation",
+    page_title="Session 2: Trust & Trustworthiness Experiment",
     page_icon="🤝",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -69,21 +69,21 @@ if 'active_game_history' not in st.session_state:
     st.session_state.active_game_history = []
 
 if 'responses' not in st.session_state:
-    # Pre-populate with realistic mock feedback data for demonstration
+    # Pre-populate with realistic mock feedback data matching the new 3 open questions schema
     st.session_state.responses = [
         {
             "Timestamp": "2026-09-04 10:12:15",
             "Student_ID": "EMBA_3042",
-            "Game_Clarity_Rating": 5,
-            "Interaction_Naturalness_Rating": 5,
-            "Strategic_Comments": "The DQN trustee's strict defection below discount rate 0.5 perfectly replicates the paper's myopia barrier. Very clear."
+            "Q1_Discount": "A discount factor below 0.5 triggers immediate and total defection ($0 returned). The AI Trustee becomes completely short-sighted and fails to cooperate.",
+            "Q2_Memory": "When the Trustor has no memory, trust collapses to zero. Memory acts as a mandatory feedback loop to establish and sustain a cooperative equilibrium.",
+            "Q3_Human": "Against a human, I would be more cautious initially because humans are prone to emotional or irrational thresholds, whereas the AI acts as a rational reinforcement learner."
         },
         {
             "Timestamp": "2026-09-04 10:15:32",
             "Student_ID": "EMBA_7195",
-            "Game_Clarity_Rating": 4,
-            "Interaction_Naturalness_Rating": 4,
-            "Strategic_Comments": "Fascinating trigger strategy response. When I returned less, the AI immediately collapsed its trust."
+            "Q1_Discount": "For γ >= 0.75, the AI Trustee consistently cooperates because the future value outweighs the current defection gain. Below 0.5, cooperation drops to zero.",
+            "Q2_Memory": "Memory is mandatory. Without it, the Trustor cannot adapt to the Trustee's actions, leading to a breakdown in coordination and zero transactions.",
+            "Q3_Human": "I would use a soft tit-for-tat strategy. Humans are more forgiving than a trigger-strategy DQN, but also slower to adapt to technical changes."
         }
     ]
 
@@ -166,14 +166,14 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⏱️ Session 2 Timeline")
 st.sidebar.markdown("""
 *   **00:00 - 00:10**: Intro & Setup
-*   **00:10 - 00:25**: Step 1 - Repeated Trust Game
-*   **00:25 - 00:45**: Step 2 - DQN Strategy Explorer
-*   **00:45 - 01:00**: Step 3 - Boardroom Lecture & Wrap-up
+*   **00:10 - 00:30**: Step 1 - repeated Trust Experiment
+*   **00:30 - 00:50**: Step 2 - Strategic Parameter Explorer
+*   **00:50 - 01:00**: Step 3 - Executive Debrief & Analysis
 """)
 
 # ----------------- MAIN PANEL -----------------
-st.markdown("<div class='main-header'>🤝 Session 2: The Evolution of Cooperation in AI and Humans</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-header'>An interactive masterclass analyzing how Deep Reinforcement Learning (DQN) agents learn to cooperate, co-adapt, and sustain trust.</div>", unsafe_allow_html=True)
+st.markdown("<div class='main-header'>🤝 Session 2: Designing Trustworthy AI Partners</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-header'>An interactive masterclass where students experiment with discount rates (γ) and memory length to optimize mutual trust and maximize returns in a canonical repeated Investment Game.</div>", unsafe_allow_html=True)
 
 # Unified Student Onboarding
 st.markdown("### 🔑 Participant Onboarding")
@@ -200,28 +200,27 @@ if st.session_state.pi_matching_mode == "Automatic Split (50% Trustor, 50% Trust
 
 # Define Tabs dynamically based on Instructor Mode
 tabs = [
-    "🎮 Step 1: Live Trust Game", 
-    "⚙️ Step 2: DQN Strategy Explorer"
+    "🎮 Play the Trust Game", 
+    "⚙️ DQN Parameter Explorer"
 ]
 if is_instructor:
-    tabs.append("📊 Step 3: Instructor Course Analytics")
-tabs.append("🎓 Step 4: Presentation Slides Outline")
+    tabs.append("📊 Instructor Course Analytics")
 
 nav_tabs = st.tabs(tabs)
 
 # =============================================================================
-# TAB 1: INTERACTIVE repeated TRUST GAME
+# TAB 1: INTERACTIVE REPEATED TRUST GAME (STUDENT PLAY)
 # =============================================================================
 with nav_tabs[0]:
     st.markdown("""
     <div class='card'>
-        <h3>🎮 Live Classroom Activity: The Repeated Investment (Trust) Game</h3>
-        <p>In this activity, you play a repeated sequence of the classic Investment (Trust) Game against a Deep Q-Network (DQN) reinforcement learning agent [227].</p>
-        <p><b>Rules:</b>
+        <h3>🎮 Live Classroom Experiment: Designing an Optimal AI Partner</h3>
+        <p>Your goal is to experiment with setting up an AI partner's parameters—<b>Future Discount Rate (γ)</b> and <b>Memory Length</b>—to discover the configuration that maximizes trust, trustworthiness, and cumulative payoff.</p>
+        <p><b>Rules of the Game:</b>
         <ul>
             <li><b>Player 1 (Trustor)</b> starts with <b>$10</b> and decides how much ($x) to send to <b>Player 2 (Trustee)</b>.</li>
             <li>The amount sent is <b>tripled (3x)</b>.</li>
-            <li>Player 2 receives the tripled amount and decides how much ($y) to return to Player 1.</li>
+            <li>Player 2 receives the tripled amount and decides how much ($y) of the tripled amount to return to Player 1.</li>
         </ul>
         </p>
     </div>
@@ -269,9 +268,9 @@ with nav_tabs[0]:
             # Interactive parameters that influence the DQN AI
             ai_discount = st.slider(
                 "Configure AI Agent's Future Discount Rate (γ):", 
-                0.02, 0.98, 0.75, 0.05, 
+                0.02, 0.98, 0.75, 0.05, \
                 key=f"disc_slider_{current_r}",
-                help="Measures how much the AI values future rewards. In human studies, this averages ~0.75. γ > 0.5 is required for cooperation."
+                help="Measures how much the AI values future rewards. γ > 0.5 is required for cooperation."
             )
             ai_memory = st.selectbox(
                 "Configure AI Agent's Memory Status:", 
@@ -354,8 +353,15 @@ with nav_tabs[0]:
                             ai_sent = random.choice([0, 1, 2])
                             
                 st.markdown(f"**AI Trustor sends you:** `${ai_sent}.00` (tripled to `${ai_sent * 3}.00` in your pool)")
-                user_returned = st.slider(f"As Trustee, how much of `${ai_sent * 3}.00` do you return to the AI?", 0, ai_sent * 3, ai_sent, key=f"user_ret_slider_{current_r}")
-                submit_ret = st.button("📤 Submit Return Amount", key=f"submit_ret_{current_r}")
+                
+                # BUG RESOLVED: Guard slider from StreamlitInvalidMinMaxError when ai_sent is 0
+                if ai_sent == 0:
+                    st.warning("⚠️ **The AI Trustor sent $0.** As a result, you have no pool to return and your payout remains $0 for this round.")
+                    user_returned = 0
+                    submit_ret = st.button("📤 Record Round", key=f"submit_ret_{current_r}")
+                else:
+                    user_returned = st.slider(f"As Trustee, how much of `${ai_sent * 3}.00` do you return to the AI?", 0, ai_sent * 3, ai_sent, key=f"user_ret_slider_{current_r}")
+                    submit_ret = st.button("📤 Submit Return Amount", key=f"submit_ret_{current_r}")
                 
                 if submit_ret:
                     round_data = {
@@ -401,19 +407,8 @@ with nav_tabs[0]:
             fig_payout.update_layout(margin=dict(l=20, r=20, t=10, b=10))
             st.plotly_chart(fig_payout, use_container_width=True)
             
-            # Sub-round explanatory mapping [275, 277]
-            if res['Role'] == "Trustor (Player 1)":
-                if res['Discount_Rate'] < 0.5:
-                    st.warning("⚠️ **Myopic AI Trustee (γ < 0.5):** Because the AI's discount rate is below 0.5, it completely discounts future reciprocity, treating this as a one-shot game and returning $0.")
-                elif res['Amount_Sent'] == 6:
-                    st.success("🎯 **Optimal Cooperative Match:** Your investment of $6 hit the exact peak reciprocity threshold where the trained DQN agent is statistically optimized to return more than what was sent.")
-                else:
-                    st.info(f"💡 **Sub-optimal Coordination:** You sent ${res['Amount_Sent']}. The AI responded based on its learned action-value grid. In repeating interactions, mutual trust stabilizes near $5.45 sent and $6.20 returned.")
-            else:
-                if res['Amount_Returned'] >= res['Amount_Sent']:
-                    st.success("🤝 **Cooperative Reinforcement:** By returning more than/equal to what was sent, you reinforced the cooperative DQN state, encouraging the AI to trust you next round.")
-                else:
-                    st.error("📉 **Trigger Defection:** By returning less than what was sent, you triggered a loss-state in the DQN. In the next round, the AI's trust is expected to collapse to a flat, low baseline.")
+            # NOTE: "DQN Strategy Explanation below the chart showing payoff" is REMOVED per user instructions.
+            st.info("💡 **Interactive Session Active:** Adjust settings on the left to see how they impact consecutive round payouts.")
         else:
             st.info("Submit your decision in the panel on the left to resolve and visualize your game results.")
 
@@ -427,58 +422,61 @@ with nav_tabs[0]:
             hide_index=True
         )
 
-    # Experience Evaluation Form
+    # Experience Evaluation Form - UPDATED with 3 open-ended qualitative questions
     st.markdown("---")
-    st.markdown("### ✍️ Strategy & Usability Evaluation")
-    st.info("💡 **Feedback Constraint:** Please submit your feedback strictly in **English** to support our multi-country statistical parsing and research collation.")
+    st.markdown("### ✍️ Experimental Strategy Vetting")
+    st.info("💡 **Feedback Constraint:** Please submit your strategic feedback strictly in **English** to support our multi-country research collation and statistical parsing.")
     
     with st.form("feedback_form"):
         st.write(f"📝 Logging feedback for participant: **{student_id}**")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            clarity_rating = st.slider(
-                "Question 1: On a scale of 1-5, how clear were the repeated Trust Game rules?",
-                min_value=1, max_value=5, value=5, step=1,
-                help="1 = Completely Confusing, 5 = Extremely Clear"
-            )
-        with col_f2:
-            naturalness_rating = st.slider(
-                "Question 2: On a scale of 1-5, how realistic and strategic did the DQN agent's repeated decisions feel?",
-                min_value=1, max_value=5, value=4, step=1,
-                help="1 = Robotic/Irrational, 5 = Highly Strategic and Human-like"
-            )
-            
-        strat_comments = st.text_area(
-            "Question 3: Qualitative Strategy Comments (Explain the patterns or trigger strategies you noticed playing against the AI):",
-            placeholder="Please write your review here in English..."
+        
+        q1_response = st.text_area(
+            "Question 1: What discount factor (γ) changes the AI's behavior, and how?",
+            placeholder="Explain how setting γ below or above 0.5 affects trust or trustworthiness...",
+            help="Refer to the theoretical myopia threshold in reinforcement learning."
         )
         
-        submit_feedback = st.form_submit_button("📤 Submit Evaluation Feedback")
+        q2_response = st.text_area(
+            "Question 2: What does the memory availability change in terms of the AI's behavior and cooperation?",
+            placeholder="Explain how disabling or enabling the Trustor's memory alters game outcomes...",
+            help="Detail what happens when the feedback loop is severed."
+        )
+        
+        q3_response = st.text_area(
+            "Question 3: If you were going to play with a human instead of an AI, how would your strategy change?",
+            placeholder="Explain your human-to-human strategic adaptation compared to playing with the DQN agent...",
+            help="Consider variances in emotional thresholds, fairness expectations, and forgiveness."
+        )
+        
+        submit_feedback = st.form_submit_button("📤 Submit Experimental Feedback")
         
         if submit_feedback:
             if not student_id:
                 st.error("❌ Submission Failed: You must enter or confirm your Student ID above first.")
+            elif not q1_response or not q2_response or not q3_response:
+                st.error("❌ Submission Failed: All three strategic questions must be answered.")
             else:
-                # English-only comment validation
-                non_ascii_found = any(ord(char) > 127 for char in strat_comments)
-                has_asian_chars = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', strat_comments))
+                # English-only comment validation across all three inputs
+                combined_feedback = q1_response + " " + q2_response + " " + q3_response
+                non_ascii_found = any(ord(char) > 127 for char in combined_feedback)
+                has_asian_chars = bool(re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', combined_feedback))
                 
                 if non_ascii_found or has_asian_chars:
-                    st.error("❌ Submission Blocked: Your comments contain non-English characters. Please translate your feedback into English and submit again.")
+                    st.error("❌ Submission Blocked: Your answers contain non-English characters. Please translate your feedback into English and submit again.")
                 else:
                     new_response = {
                         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Student_ID": student_id,
-                        "Game_Clarity_Rating": clarity_rating,
-                        "Interaction_Naturalness_Rating": naturalness_rating,
-                        "Strategic_Comments": strat_comments if strat_comments else "No comments provided."
+                        "Q1_Discount": q1_response,
+                        "Q2_Memory": q2_response,
+                        "Q3_Human": q3_response
                     }
                     st.session_state.responses.append(new_response)
                     st.balloons()
-                    st.success(f"🎉 Thank you, {student_id}! Your feedback has been recorded successfully.")
+                    st.success(f"🎉 Thank you, {student_id}! Your experimental observations have been recorded.")
 
 # =============================================================================
-# TAB 2: DQN STRATEGY EXPLORER
+# TAB 2: DQN STRATEGY EXPLORER (STUDENT PARAMETER LAB)
 # =============================================================================
 with nav_tabs[1]:
     st.markdown("""
@@ -564,31 +562,25 @@ if is_instructor:
         st.markdown("<h3 style='color: #1E3A8A;'>📊 Step 3: Instructor Course Analytics Dashboard</h3>", unsafe_allow_html=True)
         st.write("Monitor live classroom submissions, verify hypotheses, and download research data.")
         
-        # 1. Likert Calibration Statistics
+        # 1. Qualitative Experimental Feedbacks
         df_responses = pd.DataFrame(st.session_state.responses)
         if not df_responses.empty:
-            st.markdown("#### **I. Student Calibration Feedbacks**")
-            col_m1, col_m2, col_m3 = st.columns(3)
-            with col_m1:
-                st.metric("Total Feedbacks", len(df_responses))
-            with col_m2:
-                st.metric("Avg Clarity (Q1)", f"{df_responses['Game_Clarity_Rating'].mean():.2f} / 5.00")
-            with col_m3:
-                st.metric("Avg Naturalness (Q2)", f"{df_responses['Interaction_Naturalness_Rating'].mean():.2f} / 5.00")
+            st.markdown("#### **I. Student Experimental Responses**")
+            st.metric("Total Submissions", len(df_responses))
             
             st.dataframe(df_responses, use_container_width=True)
             
-            # Export Calibration CSV
+            # Export Responses CSV
             csv_calib = df_responses.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download Calibration Data (.CSV)",
+                label="📥 Download Qualitative Responses (.CSV)",
                 data=csv_calib,
-                file_name="emba_trust_game_calibration.csv",
+                file_name="emba_trust_experiment_responses.csv",
                 mime="text/csv",
                 key="dl_calib"
             )
         else:
-            st.info("No calibration feedback submitted yet.")
+            st.info("No experimental feedback submitted yet.")
             
         st.markdown("---")
         
@@ -688,59 +680,3 @@ if is_instructor:
                 st.plotly_chart(fig_mem_live, use_container_width=True)
         else:
             st.info("No game sessions logged yet.")
-
-# =============================================================================
-# TAB 4: PRESENTATION SLIDES OUTLINE
-# =============================================================================
-slides_tab_idx = 3 if is_instructor else 2
-with nav_tabs[slides_tab_idx]:
-    st.markdown("""
-    <div class='card'>
-        <h3>📊 Session 2 Executive Slide Deck & Teaching Outline</h3>
-        <p>This slide deck structures the core managerial and scientific insights of the <b>DQN Trust paper</b>. It is optimized to lead EMBA executives to the "Aha!" moment regarding AI cooperation and strategic alignment.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    slides = [
-        {
-            "num": "Slide 1",
-            "title": "Title: Building Socially Intelligent AI Systems",
-            "bullets": [
-                "**Subtitle:** Evidence from the Trust Game using Artificial Agents with Deep Learning [225].",
-                "**Key Visual:** Deep Q-Network (DQN) architecture schematic mapping observation, action, and reward flows [249].",
-                "**Core Question:** Can autonomous AI agents develop trusting and cooperative behaviors purely through interactive, trial-and-error learning without human templates [228, 235]?"
-            ]
-        },
-        {
-            "num": "Slide 2",
-            "title": "The Strategic Sandbox: The Investment Game",
-            "bullets": [
-                "**Game Mechanics:** Trustor starts with $10, decides sending amount $x$ (tripled). Trustee decides return amount $y$ [4, 245].",
-                "**The Nash Equilibrium Failure:** Traditional economics predicts zero cooperation ($x=0, y=0$) under self-interest assumptions [238].",
-                "**The Empirical Reality:** Both humans and co-adapted DQN agents consistently achieve robust cooperation to maximize joint welfare [239, 262]."
-            ]
-        },
-        {
-            "num": "Slide 3",
-            "title": "The Architecture of Trust: Memory & Future Focus",
-            "bullets": [
-                "**Memory is Mandatory (Result 2):** DQN trustors *must* possess memory of past interactions to develop trust [283]. Without memory, cooperation collapses completely to zero [283].",
-                "**The Myopia Barrier (Result 3):** AI Trustees require a future discount rate $\\gamma > 0.5$ [293]. If the future is valued at less than 50% of the present, defection is the dominant strategy [293].",
-                "**Takeaway for Managers:** When deploying automated negotiations or pricing networks, memory and future incentives must be explicitly hard-coded into the reward logic to maintain system stability."
-            ]
-        },
-        {
-            "num": "Slide 4",
-            "title": "DQN Response Dynamics & Trigger Strategies",
-            "bullets": [
-                "**Reciprocity Peak:** AI Trustees return the highest proportion of gains when Trustors send exactly $6, rather than lower or higher amounts [276].",
-                "**The Behavioral Trigger:** Trustors condition cooperation on past gains. A negative past gain triggers a complete collapse in sending, mirroring the classic Trigger Strategy in game theory [277, 279].",
-                "**Takeaway for Managers:** Trust-building does not require human emotional predispositions; it emerges naturally from rational reinforcement learning in repeated interaction ecologies [299, 302]."
-            ]
-        }
-    ]
-    
-    for s in slides:
-        with st.expander(f"📝 {s['num']}: {s['title']}"):
-            for b in s['bullets']:
-                st.markdown(b)
