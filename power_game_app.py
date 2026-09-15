@@ -410,11 +410,14 @@ ui_translations = {
 }
 
 # Helper to get UI string with English fallback
-def get_ui(lang, key, **kwargs):
-    dict_lang = ui_translations.get(lang, ui_translations["English"])
-    text = dict_lang.get(key, ui_translations["English"].get(key, ""))
+def get_ui(target_lang, text_key, **kwargs):
+    dict_lang = ui_translations.get(target_lang, ui_translations.get("English", {}))
+    text = dict_lang.get(text_key, ui_translations.get("English", {}).get(text_key, ""))
     if kwargs:
-        return text.format(**kwargs)
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
     return text
 
 # Empirical Baseline Data per Language/Country from Working Paper
