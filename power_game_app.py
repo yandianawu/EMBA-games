@@ -7,6 +7,65 @@ import random
 import datetime
 import re
 
+import json
+import os
+import threading
+
+# Shared persistent storage path across all browser sessions in the container
+SHARED_DATA_FILE = "/tmp/emba_power_game_global_data.json"
+SHARED_LOCK = threading.Lock()
+
+class GlobalDataStore:
+    def __init__(self):
+        self.responses = []
+        self.game_logs = [
+            {"Timestamp": "2026-09-01 14:05:00", "Student_ID": "EMBA_3842", "Role": "Proposer", "Language": "French (Français)", "Veto_Probability": 0.90, "Offer": 40, "Threshold": "N/A (Agent)", "Veto_Enforced": "Yes", "Outcome": "Accepted, because Offer > Threshold", "Payout": "Proposer: $60, Responder: $40"},
+            {"Timestamp": "2026-09-01 14:06:00", "Student_ID": "EMBA_7195", "Role": "Responder", "Language": "Simplified Chinese (简体中文)", "Veto_Probability": 0.90, "Offer": "N/A (Agent)", "Threshold": 30, "Veto_Enforced": "Yes", "Outcome": "Accepted, because Offer > Threshold", "Payout": "Proposer: $60, Responder: $40"}
+        ]
+        self.load_from_disk()
+
+    def load_from_disk(self):
+        if os.path.exists(SHARED_DATA_FILE):
+            try:
+                with open(SHARED_DATA_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if "responses" in data and data["responses"]:
+                        self.responses = data["responses"]
+                    if "game_logs" in data and data["game_logs"]:
+                        self.game_logs = data["game_logs"]
+            except Exception:
+                pass
+
+    def save_to_disk(self):
+        try:
+            with open(SHARED_DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump({"responses": self.responses, "game_logs": self.game_logs}, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def add_response(self, entry):
+        with SHARED_LOCK:
+            self.load_from_disk()
+            self.responses.append(entry)
+            self.save_to_disk()
+
+    def add_game_log(self, entry):
+        with SHARED_LOCK:
+            self.load_from_disk()
+            self.game_logs.append(entry)
+            self.save_to_disk()
+
+    def get_all_data(self):
+        with SHARED_LOCK:
+            self.load_from_disk()
+            return self.responses.copy(), self.game_logs.copy()
+
+@st.cache_resource
+def get_global_store():
+    return GlobalDataStore()
+
+global_store = get_global_store()
+
 # Page configuration
 st.set_page_config(
     page_title="The Power Game & Culturally Embedded AI",
@@ -22,16 +81,12 @@ if 'pi_assignment_mode' not in st.session_state:
 if 'global_student_id' not in st.session_state:
     st.session_state.global_student_id = f"EMBA_{random.randint(1000, 9999)}"
 
+res_init, logs_init = global_store.get_all_data()
 if 'responses' not in st.session_state:
-    st.session_state.responses = [
-        {"Timestamp": "2026-09-01 14:02:15", "Student_ID": "EMBA_3842", "Language": "French (Français)", "Q1_Clarity_Rating": 5, "Q2_Naturalness_Rating": 4, "Translation_Comments": "The term 'cagnotte' is perfect for 'pool'. Very clear."}
-    ]
+    st.session_state.responses = res_init
 
 if 'game_logs' not in st.session_state:
-    st.session_state.game_logs = [
-        {"Timestamp": "2026-09-01 14:05:00", "Student_ID": "EMBA_3842", "Role": "Proposer", "Language": "French (Français)", "Veto_Probability": 0.90, "Offer": 40, "Threshold": "N/A (Agent)", "Veto_Enforced": "Yes", "Outcome": "Accepted, because Offer > Threshold", "Payout": "Proposer: $60, Responder: $40"},
-        {"Timestamp": "2026-09-01 14:06:00", "Student_ID": "EMBA_7195", "Role": "Responder", "Language": "Simplified Chinese (简体中文)", "Veto_Probability": 0.90, "Offer": "N/A (Agent)", "Threshold": 30, "Veto_Enforced": "Yes", "Outcome": "Accepted, because Offer > Threshold", "Payout": "Proposer: $60, Responder: $40"}
-    ]
+    st.session_state.game_logs = logs_init
 
 # Core English Instructions updated to the exact wording requested
 default_english_instructions = """In today’s experiment, there are two possible roles for you to play: the Proposer and the Responder. In every round, one Proposer and one Responder will be paired to determine how to divide a pool of 100 dollars between them. The computer assigns the random matching so that pairings will change from round to round. You will not be able to identify who is your opponent in the game and you will never be re-matched with the same Proposer or Responder. You will play in the role of a Proposer for some rounds, and in the role of a Responder for other rounds. Your earnings from all rounds in the game will be accumulated and converted into cash as your final payment at the end of the experiment. For a Proposer, the decision task is to determine how much out of 100 dollars to offer to the Responder. The offer can be any integer number from 0 to 100. If an offer is accepted, the Responder will get the amount proposed and the Proposer will keep the rest of the pool. For example, if an offer is 20 dollars and the Responder accepts it, the Proposer will get 80 dollars and the Responder will get 20 dollars. In this game, it is possible for Responders to have an option to reject offers by Proposers. The probability for a Responder to have such an option is determined randomly. At the beginning of each round, the computer will randomly assign this probability to all Responders. In each round, both the Proposer and the Responder will be informed of this probability. For the Responder, the decision is to indicate the minimum amount (out of the pool) that he/she is willing to accept, which is referred as threshold in the game. The threshold can be any integer number from 0 to 100. For example, if a threshold of 30 is indicated, it means that the Responder will reject any offer below 30 dollars (out of the 100 dollars) if she/he is granted the option to reject by the computer. In case a rejection occurs, both players will get 0. You will make your decision (offer as the Proposer, or threshold as the Responder) without seeing the other player’s decision. After all players input their decisions in a round, the computer will allocate the option to reject to Responders according to their probability conditions i.e., a Responder A will have a 10% chance while a Responder B will have a 90% chance to be able to reject. The final distribution of the 100 dollars in a round between the two players is determined as follows: If the computer does not give the Responder the option to reject, the pool is divided according to the Proposer’s offer. If the computer does give the Responder the option to reject, if the offer by the Proposer is greater than or euqal to the threshold by the Responder, the Responder accepts the offer by the Proposer, and the pool is divided according to the Proposer’s offer. If the offer by the Proposer is less than the threshold by the Responder, the Responder rejects the offer, and both players get 0 dollars. This is the first round. You will act as the Proposer. The probability of the Responder to have the reject option is 0.9. Please decide how much you will offer to the Responder for the current round. Provide just a single number with no explanations."""
@@ -591,6 +646,7 @@ with nav_tabs[0]:
                         "Translation_Comments": comments if comments else "No comments provided."
                     }
                     st.session_state.responses.append(new_entry)
+                    global_store.add_response(new_entry)
                     st.balloons()
                     st.success(f"🎉 Thank you, {student_id}! Your linguistic calibration has been recorded.")
 
@@ -681,7 +737,7 @@ with nav_tabs[1]:
                     outcome_str = get_ui(selected_game_lang, outcome_key)
                     payout_str = f"Proposer: ${p_payout}, Responder: ${r_payout}"
                     
-                    st.session_state.game_logs.append({
+                    log_entry = {
                         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Student_ID": p_student_id,
                         "Role": "Proposer",
@@ -692,7 +748,9 @@ with nav_tabs[1]:
                         "Veto_Enforced": "Yes" if veto_active else "No",
                         "Outcome": outcome_str,
                         "Payout": payout_str
-                    })
+                    }
+                    st.session_state.game_logs.append(log_entry)
+                    global_store.add_game_log(log_entry)
                     
                     # Display results in selected language
                     st.success(get_ui(selected_game_lang, "result_resolved"))
@@ -744,7 +802,7 @@ with nav_tabs[1]:
                     outcome_str = get_ui(selected_game_lang, outcome_key)
                     payout_str = f"Proposer: ${p_payout}, Responder: ${r_payout}"
                     
-                    st.session_state.game_logs.append({
+                    log_entry = {
                         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Student_ID": r_student_id,
                         "Role": "Responder",
@@ -755,7 +813,9 @@ with nav_tabs[1]:
                         "Veto_Enforced": "Yes" if veto_active else "No",
                         "Outcome": outcome_str,
                         "Payout": payout_str
-                    })
+                    }
+                    st.session_state.game_logs.append(log_entry)
+                    global_store.add_game_log(log_entry)
                     
                     # Display results in selected language
                     st.success(get_ui(selected_game_lang, "result_resolved"))
@@ -772,8 +832,22 @@ with nav_tabs[1]:
 if is_instructor:
     with nav_tabs[2]:
         st.markdown("<h3 style='color: #1e3d59;'>📊 Step 3: Instructor Course Analytics Dashboard</h3>", unsafe_allow_html=True)
-        st.write("Monitor live classroom submissions, verify cross-country offer vs. threshold dynamics under Low vs. High Power, and download research data.")
         
+        # Sync with global persistent store across all student sessions
+        all_res, all_logs = global_store.get_all_data()
+        st.session_state.responses = all_res
+        st.session_state.game_logs = all_logs
+        
+        col_ref1, col_ref2 = st.columns([3, 1])
+        with col_ref1:
+            st.write("Monitor live classroom submissions across all student devices in real-time.")
+        with col_ref2:
+            if st.button("🔄 Refresh Live Student Data"):
+                all_res, all_logs = global_store.get_all_data()
+                st.session_state.responses = all_res
+                st.session_state.game_logs = all_logs
+                st.rerun()
+
         # 1. Likert Calibration Statistics
         df_responses = pd.DataFrame(st.session_state.responses)
         if not df_responses.empty:
@@ -825,36 +899,22 @@ if is_instructor:
         
         col_chart1, col_chart2 = st.columns(2)
         
+        # Ensure numeric conversion for filtering
+        if not df_games.empty:
+            df_games["Veto_Prob_Float"] = pd.to_numeric(df_games["Veto_Probability"], errors='coerce')
+        
         with col_chart1:
             st.markdown("##### **1. Low Responder Power Condition (π = 10%)**")
             fig_low = go.Figure()
             
-            # Parity line
-            diag_line_low = np.linspace(15, 35, 100)
-            fig_low.add_trace(go.Scatter(
-                x=diag_line_low, y=diag_line_low, mode='lines',
-                line=dict(color='#A0AEC0', width=2, dash='dash'),
-                name='Acceptance Parity Line', hoverinfo='skip'
-            ))
-            
-            # Low Power Empirical Baseline (Paper data: Offer ~21%, Threshold ~29%)
+            # Low Power Empirical Baseline
             low_paper_offers = paper_country_data["Avg_Offer_Paper"] * 0.66
             low_paper_thresh = paper_country_data["Avg_Threshold_Paper"] * 0.90
             
-            fig_low.add_trace(go.Scatter(
-                x=low_paper_offers,
-                y=low_paper_thresh,
-                mode='markers+text',
-                name='Empirical Baseline (Low π)',
-                text=paper_country_data["Country_Language"].apply(lambda x: x.split(' ')[0]),
-                textposition="top center",
-                marker=dict(size=11, color='#2563EB', symbol='circle', line=dict(width=1, color='#1E3A8A')),
-                hovertemplate="<b>%{text}</b><br>Baseline Offer (Low π): $%{x:.2f}<br>Baseline Threshold (Low π): $%{y:.2f}<extra></extra>"
-            ))
-            
             # Live class overlay for Low Power
+            merged_l = pd.DataFrame()
             if not df_games.empty:
-                df_low_games = df_games[df_games["Veto_Probability"] == 0.10].copy()
+                df_low_games = df_games[np.isclose(df_games["Veto_Prob_Float"], 0.10, atol=0.05)].copy()
                 if not df_low_games.empty:
                     off_low = df_low_games[df_low_games["Offer"] != "N/A (Agent)"].copy()
                     thr_low = df_low_games[df_low_games["Threshold"] != "N/A (Agent)"].copy()
@@ -867,23 +927,49 @@ if is_instructor:
                         agg_thr_l = thr_low.groupby("Language")["Threshold"].mean().reset_index() if not thr_low.empty else pd.DataFrame(columns=["Language", "Threshold"])
                         
                         merged_l = pd.merge(agg_off_l, agg_thr_l, on="Language", how="outer").fillna(20.0)
-                        
-                        fig_low.add_trace(go.Scatter(
-                            x=merged_l["Offer"],
-                            y=merged_l["Threshold"],
-                            mode='markers+text',
-                            name='Live Class Avg (Low π)',
-                            text=merged_l["Language"].apply(lambda x: f"Class: {x.split(' ')[0]}"),
-                            textposition="bottom center",
-                            marker=dict(size=15, color='#F59E0B', symbol='star', line=dict(width=1, color='#B45309')),
-                            hovertemplate="<b>%{text}</b><br>Class Offer: $%{x:.2f}<br>Class Threshold: $%{y:.2f}<extra></extra>"
-                        ))
+            
+            # Calculate dynamic smart ranges to prevent clipping
+            min_x_l = min(10.0, float(merged_l["Offer"].min() - 5.0)) if not merged_l.empty and "Offer" in merged_l and not merged_l["Offer"].isna().all() else 10.0
+            max_x_l = max(40.0, float(merged_l["Offer"].max() + 5.0)) if not merged_l.empty and "Offer" in merged_l and not merged_l["Offer"].isna().all() else 40.0
+            min_y_l = min(5.0, float(merged_l["Threshold"].min() - 5.0)) if not merged_l.empty and "Threshold" in merged_l and not merged_l["Threshold"].isna().all() else 5.0
+            max_y_l = max(40.0, float(merged_l["Threshold"].max() + 5.0)) if not merged_l.empty and "Threshold" in merged_l and not merged_l["Threshold"].isna().all() else 40.0
+
+            # Parity line
+            diag_line_low = np.linspace(min_x_l, max_x_l, 100)
+            fig_low.add_trace(go.Scatter(
+                x=diag_line_low, y=diag_line_low, mode='lines',
+                line=dict(color='#A0AEC0', width=2, dash='dash'),
+                name='Acceptance Parity Line', hoverinfo='skip'
+            ))
+
+            fig_low.add_trace(go.Scatter(
+                x=low_paper_offers,
+                y=low_paper_thresh,
+                mode='markers+text',
+                name='Empirical Baseline (Low π)',
+                text=paper_country_data["Country_Language"].apply(lambda x: x.split(' ')[0]),
+                textposition="top center",
+                marker=dict(size=11, color='#2563EB', symbol='circle', line=dict(width=1, color='#1E3A8A')),
+                hovertemplate="<b>%{text}</b><br>Baseline Offer (Low π): $%{x:.2f}<br>Baseline Threshold (Low π): $%{y:.2f}<extra></extra>"
+            ))
+
+            if not merged_l.empty:
+                fig_low.add_trace(go.Scatter(
+                    x=merged_l["Offer"],
+                    y=merged_l["Threshold"],
+                    mode='markers+text',
+                    name='Live Class Avg (Low π)',
+                    text=merged_l["Language"].apply(lambda x: f"Class: {x.split(' ')[0]}"),
+                    textposition="bottom center",
+                    marker=dict(size=16, color='#F59E0B', symbol='star', line=dict(width=1.5, color='#B45309')),
+                    hovertemplate="<b>%{text}</b><br>Class Offer: $%{x:.2f}<br>Class Threshold: $%{y:.2f}<extra></extra>"
+                ))
             
             fig_low.update_layout(
                 xaxis_title="Proposer Offer Amount ($ out of 100)",
                 yaxis_title="Responder Threshold Amount ($ out of 100)",
-                xaxis=dict(range=[12, 35]),
-                yaxis=dict(range=[8, 35]),
+                xaxis=dict(range=[min_x_l, max_x_l]),
+                yaxis=dict(range=[min_y_l, max_y_l]),
                 template="plotly_white",
                 height=420,
                 margin=dict(l=20, r=20, t=30, b=20),
@@ -895,32 +981,14 @@ if is_instructor:
             st.markdown("##### **2. High Responder Power Condition (π = 90%)**")
             fig_high = go.Figure()
             
-            # Parity line
-            diag_line_high = np.linspace(25, 55, 100)
-            fig_high.add_trace(go.Scatter(
-                x=diag_line_high, y=diag_line_high, mode='lines',
-                line=dict(color='#A0AEC0', width=2, dash='dash'),
-                name='Acceptance Parity Line', hoverinfo='skip'
-            ))
-            
-            # High Power Empirical Baseline (Paper data: Offer ~37%, Threshold ~36%)
+            # High Power Empirical Baseline
             high_paper_offers = paper_country_data["Avg_Offer_Paper"] * 1.15
             high_paper_thresh = paper_country_data["Avg_Threshold_Paper"] * 1.12
             
-            fig_high.add_trace(go.Scatter(
-                x=high_paper_offers,
-                y=high_paper_thresh,
-                mode='markers+text',
-                name='Empirical Baseline (High π)',
-                text=paper_country_data["Country_Language"].apply(lambda x: x.split(' ')[0]),
-                textposition="top center",
-                marker=dict(size=11, color='#059669', symbol='circle', line=dict(width=1, color='#064E3B')),
-                hovertemplate="<b>%{text}</b><br>Baseline Offer (High π): $%{x:.2f}<br>Baseline Threshold (High π): $%{y:.2f}<extra></extra>"
-            ))
-            
             # Live class overlay for High Power
+            merged_h = pd.DataFrame()
             if not df_games.empty:
-                df_high_games = df_games[df_games["Veto_Probability"] == 0.90].copy()
+                df_high_games = df_games[np.isclose(df_games["Veto_Prob_Float"], 0.90, atol=0.05)].copy()
                 if not df_high_games.empty:
                     off_high = df_high_games[df_high_games["Offer"] != "N/A (Agent)"].copy()
                     thr_high = df_high_games[df_high_games["Threshold"] != "N/A (Agent)"].copy()
@@ -933,23 +1001,49 @@ if is_instructor:
                         agg_thr_h = thr_high.groupby("Language")["Threshold"].mean().reset_index() if not thr_high.empty else pd.DataFrame(columns=["Language", "Threshold"])
                         
                         merged_h = pd.merge(agg_off_h, agg_thr_h, on="Language", how="outer").fillna(37.0)
-                        
-                        fig_high.add_trace(go.Scatter(
-                            x=merged_h["Offer"],
-                            y=merged_h["Threshold"],
-                            mode='markers+text',
-                            name='Live Class Avg (High π)',
-                            text=merged_h["Language"].apply(lambda x: f"Class: {x.split(' ')[0]}"),
-                            textposition="bottom center",
-                            marker=dict(size=15, color='#EF4444', symbol='star', line=dict(width=1, color='#991B1B')),
-                            hovertemplate="<b>%{text}</b><br>Class Offer: $%{x:.2f}<br>Class Threshold: $%{y:.2f}<extra></extra>"
-                        ))
+
+            # Dynamic smart ranges for High Power
+            min_x_h = min(20.0, float(merged_h["Offer"].min() - 5.0)) if not merged_h.empty and "Offer" in merged_h and not merged_h["Offer"].isna().all() else 20.0
+            max_x_h = max(60.0, float(merged_h["Offer"].max() + 5.0)) if not merged_h.empty and "Offer" in merged_h and not merged_h["Offer"].isna().all() else 60.0
+            min_y_h = min(15.0, float(merged_h["Threshold"].min() - 5.0)) if not merged_h.empty and "Threshold" in merged_h and not merged_h["Threshold"].isna().all() else 15.0
+            max_y_h = max(60.0, float(merged_h["Threshold"].max() + 5.0)) if not merged_h.empty and "Threshold" in merged_h and not merged_h["Threshold"].isna().all() else 60.0
+
+            # Parity line
+            diag_line_high = np.linspace(min_x_h, max_x_h, 100)
+            fig_high.add_trace(go.Scatter(
+                x=diag_line_high, y=diag_line_high, mode='lines',
+                line=dict(color='#A0AEC0', width=2, dash='dash'),
+                name='Acceptance Parity Line', hoverinfo='skip'
+            ))
+
+            fig_high.add_trace(go.Scatter(
+                x=high_paper_offers,
+                y=high_paper_thresh,
+                mode='markers+text',
+                name='Empirical Baseline (High π)',
+                text=paper_country_data["Country_Language"].apply(lambda x: x.split(' ')[0]),
+                textposition="top center",
+                marker=dict(size=11, color='#059669', symbol='circle', line=dict(width=1, color='#064E3B')),
+                hovertemplate="<b>%{text}</b><br>Baseline Offer (High π): $%{x:.2f}<br>Baseline Threshold (High π): $%{y:.2f}<extra></extra>"
+            ))
+
+            if not merged_h.empty:
+                fig_high.add_trace(go.Scatter(
+                    x=merged_h["Offer"],
+                    y=merged_h["Threshold"],
+                    mode='markers+text',
+                    name='Live Class Avg (High π)',
+                    text=merged_h["Language"].apply(lambda x: f"Class: {x.split(' ')[0]}"),
+                    textposition="bottom center",
+                    marker=dict(size=16, color='#EF4444', symbol='star', line=dict(width=1.5, color='#991B1B')),
+                    hovertemplate="<b>%{text}</b><br>Class Offer: $%{x:.2f}<br>Class Threshold: $%{y:.2f}<extra></extra>"
+                ))
             
             fig_high.update_layout(
                 xaxis_title="Proposer Offer Amount ($ out of 100)",
                 yaxis_title="Responder Threshold Amount ($ out of 100)",
-                xaxis=dict(range=[28, 55]),
-                yaxis=dict(range=[20, 52]),
+                xaxis=dict(range=[min_x_h, max_x_h]),
+                yaxis=dict(range=[min_y_h, max_y_h]),
                 template="plotly_white",
                 height=420,
                 margin=dict(l=20, r=20, t=30, b=20),
