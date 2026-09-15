@@ -821,11 +821,7 @@ if is_instructor:
             
         st.markdown("---")
         st.markdown("#### **III. Cross-Country Bargaining Analytics: Low Power (π = 0.10) vs. High Power (π = 0.90)**")
-        st.write(
-            "These two charts map **Average Proposer Offer ($)** on the X-axis against **Average Responder Threshold ($)** "
-            "on the Y-axis across different countries and languages. Chart 1 shows the Low Responder Power condition (π = 10%), "
-            "and Chart 2 shows the High Responder Power condition (π = 90%)."
-        )
+        st.write("These two charts map Average Proposer Offer on the X-axis against Average Threshold on the Y-axis across different countries and languages. Dots are results from LLM agents. Stars are results from live classroom experiment.")
         
         col_chart1, col_chart2 = st.columns(2)
         
