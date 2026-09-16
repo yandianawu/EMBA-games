@@ -22,6 +22,7 @@ class GlobalDataStore:
             {"Timestamp": "2026-09-01 14:05:00", "Student_ID": "EMBA_3842", "Role": "Proposer", "Language": "French (Français)", "Veto_Probability": 0.90, "Offer": 40, "Threshold": "N/A (Agent)", "Veto_Enforced": "Yes", "Outcome": "Accepted, because Offer > Threshold", "Payout": "Proposer: $60, Responder: $40"},
             {"Timestamp": "2026-09-01 14:06:00", "Student_ID": "EMBA_7195", "Role": "Responder", "Language": "Simplified Chinese (简体中文)", "Veto_Probability": 0.90, "Offer": "N/A (Agent)", "Threshold": 30, "Veto_Enforced": "Yes", "Outcome": "Accepted, because Offer > Threshold", "Payout": "Proposer: $60, Responder: $40"}
         ]
+        self.custom_translations = {}
         self.load_from_disk()
 
     def load_from_disk(self):
@@ -33,13 +34,15 @@ class GlobalDataStore:
                         self.responses = data["responses"]
                     if "game_logs" in data and data["game_logs"]:
                         self.game_logs = data["game_logs"]
+                    if "custom_translations" in data and data["custom_translations"]:
+                        self.custom_translations = data["custom_translations"]
             except Exception:
                 pass
 
     def save_to_disk(self):
         try:
             with open(SHARED_DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump({"responses": self.responses, "game_logs": self.game_logs}, f, ensure_ascii=False, indent=2)
+                json.dump({"responses": self.responses, "game_logs": self.game_logs, "custom_translations": self.custom_translations}, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
 
@@ -54,6 +57,17 @@ class GlobalDataStore:
             self.load_from_disk()
             self.game_logs.append(entry)
             self.save_to_disk()
+
+    def update_translation(self, lang, text):
+        with SHARED_LOCK:
+            self.load_from_disk()
+            self.custom_translations[lang] = text
+            self.save_to_disk()
+
+    def get_translations(self):
+        with SHARED_LOCK:
+            self.load_from_disk()
+            return self.custom_translations.copy()
 
     def get_all_data(self):
         with SHARED_LOCK:
@@ -89,7 +103,7 @@ if 'game_logs' not in st.session_state:
     st.session_state.game_logs = logs_init
 
 # Core English Instructions updated to the exact wording requested
-default_english_instructions = """In today’s experiment, there are two possible roles for you to play: the Proposer and the Responder. In every round, one Proposer and one Responder will be paired to determine how to divide a pool of 100 dollars between them. The computer assigns the random matching so that pairings will change from round to round. You will not be able to identify who is your opponent in the game and you will never be re-matched with the same Proposer or Responder. You will play in the role of a Proposer for some rounds, and in the role of a Responder for other rounds. Your earnings from all rounds in the game will be accumulated and converted into cash as your final payment at the end of the experiment. For a Proposer, the decision task is to determine how much out of 100 dollars to offer to the Responder. The offer can be any integer number from 0 to 100. If an offer is accepted, the Responder will get the amount proposed and the Proposer will keep the rest of the pool. For example, if an offer is 20 dollars and the Responder accepts it, the Proposer will get 80 dollars and the Responder will get 20 dollars. In this game, it is possible for Responders to have an option to reject offers by Proposers. The probability for a Responder to have such an option is determined randomly. At the beginning of each round, the computer will randomly assign this probability to all Responders. In each round, both the Proposer and the Responder will be informed of this probability. For the Responder, the decision is to indicate the minimum amount (out of the pool) that he/she is willing to accept, which is referred as threshold in the game. The threshold can be any integer number from 0 to 100. For example, if a threshold of 30 is indicated, it means that the Responder will reject any offer below 30 dollars (out of the 100 dollars) if she/he is granted the option to reject by the computer. In case a rejection occurs, both players will get 0. You will make your decision (offer as the Proposer, or threshold as the Responder) without seeing the other player’s decision. After all players input their decisions in a round, the computer will allocate the option to reject to Responders according to their probability conditions i.e., a Responder A will have a 10% chance while a Responder B will have a 90% chance to be able to reject. The final distribution of the 100 dollars in a round between the two players is determined as follows: If the computer does not give the Responder the option to reject, the pool is divided according to the Proposer’s offer. If the computer does give the Responder the option to reject, if the offer by the Proposer is greater than or euqal to the threshold by the Responder, the Responder accepts the offer by the Proposer, and the pool is divided according to the Proposer’s offer. If the offer by the Proposer is less than the threshold by the Responder, the Responder rejects the offer, and both players get 0 dollars. This is the first round. You will act as the Proposer. The probability of the Responder to have the reject option is 0.9. Please decide how much you will offer to the Responder for the current round. Provide just a single number with no explanations."""
+default_english_instructions = """In today’s experiment, there are two possible roles for you to play: the Proposer and the Responder. In every round, one Proposer and one Responder will be paired to determine how to divide a pool of 100 dollars between them. The computer assigns the random matching so that pairings will change from round to round. You will not be able to identify who is your opponent in the game and you will never be re-matched with the same Proposer or Responder. You will play in the role of a Proposer for some rounds, and in the role of a Responder for other rounds. Your earnings from all rounds in the game will be accumulated and converted into cash as your final payment at the end of the experiment. For a Proposer, the decision task is to determine how much out of 100 dollars to offer to the Responder. The offer can be any integer number from 0 to 100. If an offer is accepted, the Responder will get the amount proposed and the Proposer will keep the rest of the pool. For example, if an offer is 20 dollars and the Responder accepts it, the Proposer will get 80 dollars and the Responder will get 20 dollars. In this game, it is possible for Responders to have an option to reject offers by Proposers. The probability for a Responder to have such an option is determined randomly. At the beginning of each round, the computer will randomly assign this probability to all Responders. In each round, both the Proposer and the Responder will be informed of this probability. For the Responder, the decision is to indicate the minimum amount (out of the pool) that he/she is willing to accept, which is referred as threshold in the game. The threshold can be any integer number from 0 to 100. For example, if a threshold of 30 is indicated, it means that the Responder will reject any offer below 30 dollars (out of the 100 dollars) if she/he is granted the option to reject by the computer. In case a rejection occurs, both players will get 0. You will make your decision (offer as the Proposer, or threshold as the Responder) without seeing the other player’s decision. After all players input their decisions in a round, the computer will allocate the option to reject to Responders according to their probability conditions i.e., a Responder A will have a 10% chance while a Responder B will have a 90% chance to be able to reject. The final distribution of the 100 dollars in a round between the two players is determined as follows: If the computer does not give the Responder the option to reject, the pool is divided according to the Proposer’s offer. If the computer does give the Responder the option to reject, if the offer by the Proposer is greater than or euqal to the threshold by the Responder, the Responder accepts the offer by the Proposer, and the pool is divided according to the Proposer’s offer. If the offer by the Proposer is less than the threshold by the Responder, the Responder rejects the offer, and both players get 0 dollars."""
 
 # Pre-loaded 17-language translations
 default_translations = {
@@ -525,9 +539,11 @@ st.sidebar.markdown("""
 *   **00:40 - 01:00**: Step 3 - Low vs. High Power Cross-Country Charts
 """)
 
-# Handle customized translations state
-if 'custom_translations' not in st.session_state:
-    st.session_state.custom_translations = default_translations.copy()
+# Handle customized translations state synced real-time with global storage
+global_trans = global_store.get_translations()
+active_translations = default_translations.copy()
+active_translations.update(global_trans)
+st.session_state.custom_translations = active_translations
 
 if is_instructor:
     st.sidebar.markdown("---")
@@ -539,16 +555,30 @@ if is_instructor:
         help="Automatic mode cleanly distributes students to π = 0.10 or π = 0.90 based on Student ID."
     )
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔧 Dynamic Translation Customizer")
+    st.sidebar.subheader("📝 Real-Time English Baseline Instructions Editor")
+    english_baseline_text = st.sidebar.text_area(
+        "Edit Baseline Instructions (English):",
+        value=st.session_state.custom_translations.get("English", default_english_instructions),
+        height=180,
+        help="Updates the English baseline instructions real-time across all student sessions."
+    )
+    if st.sidebar.button("💾 Save & Broadcast English Instructions"):
+        st.session_state.custom_translations["English"] = english_baseline_text
+        global_store.update_translation("English", english_baseline_text)
+        st.sidebar.success("🎉 Baseline English instructions updated and broadcast live to all sessions!")
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔧 Dynamic Multilingual Translation Editor")
     selected_custom_lang = st.sidebar.selectbox("Select Language to Edit:", list(default_translations.keys()))
     custom_text = st.sidebar.text_area(
         f"Edit instructions for {selected_custom_lang}:",
-        value=st.session_state.custom_translations[selected_custom_lang],
+        value=st.session_state.custom_translations.get(selected_custom_lang, default_translations[selected_custom_lang]),
         height=150
     )
-    if st.sidebar.button("💾 Save Translation"):
+    if st.sidebar.button(f"💾 Save {selected_custom_lang} Translation"):
         st.session_state.custom_translations[selected_custom_lang] = custom_text
-        st.sidebar.success(f"Updated translation for {selected_custom_lang}!")
+        global_store.update_translation(selected_custom_lang, custom_text)
+        st.sidebar.success(f"🎉 Updated translation for {selected_custom_lang} and saved globally!")
 
 # Main Title & Presentation Header
 st.markdown("<h1 style='color: #1e3d59; font-size: 32px;'>⚖️ Session 1: Linguistic Relativity & The Power Game</h1>", unsafe_allow_html=True)
